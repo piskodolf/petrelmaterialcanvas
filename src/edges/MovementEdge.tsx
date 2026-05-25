@@ -8,6 +8,7 @@ import {
   useReactFlow,
   type EdgeProps
 } from '@xyflow/react';
+import { getSmartEdge, svgDrawSmoothLinePath, svgDrawStraightLinePath } from '@jalez/react-flow-smart-edge';
 import { Truck, Box, Trash2, Zap, Package, User, Activity, ArrowRight, Settings, FileText } from 'lucide-react';
 import { useMaterials } from '../contexts/MaterialContext';
 import './edges.css';
@@ -25,7 +26,7 @@ export const MovementEdge = memo(({
   id,
   selected,
 }: EdgeProps) => {
-  const { deleteElements, setEdges } = useReactFlow();
+  const { deleteElements, setEdges, getNodes } = useReactFlow();
   const { 
     library, addMaterialToLibrary, removeMaterialFromLibrary, activeFilter,
     savedPerformers, addPerformer, savedTools, addTool 
@@ -183,7 +184,28 @@ export const MovementEdge = memo(({
   const pathParams = { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition };
   
   let edgePath, labelX, labelY;
-  if (pathType === 'smoothstep') {
+  
+  if (pathType === 'smartstep') {
+    const nodes = getNodes();
+    const smartEdge = getSmartEdge({
+      sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
+      nodes,
+      options: {
+        drawEdge: svgDrawSmoothLinePath,
+        nodePadding: 20,
+        gridRatio: 15
+      }
+    });
+
+    if (smartEdge) {
+      edgePath = smartEdge.svgPathString;
+      labelX = smartEdge.edgeCenterX;
+      labelY = smartEdge.edgeCenterY;
+    } else {
+      const borderRadius = data?.borderRadius ? Number(data.borderRadius) : 16;
+      [edgePath, labelX, labelY] = getSmoothStepPath({ ...pathParams, borderRadius });
+    }
+  } else if (pathType === 'smoothstep') {
     const borderRadius = data?.borderRadius ? Number(data.borderRadius) : 16;
     [edgePath, labelX, labelY] = getSmoothStepPath({ ...pathParams, borderRadius });
   } else if (pathType === 'straight') {
@@ -192,11 +214,28 @@ export const MovementEdge = memo(({
     [edgePath, labelX, labelY] = getBezierPath(pathParams);
   }
 
-  const edgeColor = isFilteredOut ? '#334155' : (isMovement ? '#3b82f6' : '#94a3b8');
+  let edgeColor = '#94a3b8';
+  let strokeW = 3;
+
+  if (connectionType === 'movement') {
+    edgeColor = '#3b82f6';
+    strokeW = 4;
+  } else if (connectionType === 'core') {
+    edgeColor = '#f59e0b';
+    strokeW = 6;
+  } else if (connectionType === 'supply') {
+    edgeColor = '#94a3b8';
+    strokeW = 1.5;
+  }
+
+  if (isFilteredOut) {
+    edgeColor = '#334155';
+    strokeW = 1;
+  }
 
   return (
     <g className={isFilteredOut ? 'filtered-out' : ''}>
-      <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: isFilteredOut ? 1 : (isMovement ? 4 : 3), stroke: edgeColor }} />
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: strokeW, stroke: edgeColor }} />
       <EdgeLabelRenderer>
         <div
           className="edge-label-container nodrag nopan"
@@ -219,6 +258,8 @@ export const MovementEdge = memo(({
                 >
                   <option value="flow">Naslednja aktivnost</option>
                   <option value="movement">Premik</option>
+                  <option value="core">Jedrni proces</option>
+                  <option value="supply">Stranska dobava</option>
                 </select>
               </div>
               <div className="movement-row" title="Oblika črte">
@@ -232,6 +273,7 @@ export const MovementEdge = memo(({
                 >
                   <option value="bezier">Krivulja</option>
                   <option value="smoothstep">Pravokotna</option>
+                  <option value="smartstep">Pametna (ovire)</option>
                   <option value="straight">Ravna</option>
                 </select>
               </div>

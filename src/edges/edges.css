@@ -15,19 +15,29 @@
   padding: 4px 8px;
   display: flex;
   align-items: center;
-  gap: 6px;
   font-size: 0.65rem;
   box-shadow: var(--shadow-node);
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: transform var(--transition-fast), border-color var(--transition-fast);
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.movement-badge.is-selected,
+.movement-badge:hover {
+  border-radius: 12px;
+  padding: 8px 12px;
+  transform: scale(1.05);
+  border-color: var(--accent-primary);
+  z-index: 10;
 }
 
 .movement-details {
   display: none;
-  flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  max-width: 320px;
+  justify-content: flex-start;
 }
 
 .movement-badge.is-selected .movement-details,
@@ -45,12 +55,6 @@
 .movement-badge.is-selected .movement-summary,
 .movement-badge:hover .movement-summary {
   display: none;
-}
-
-.movement-badge:hover {
-  transform: scale(1.05);
-  border-color: var(--accent-primary);
-  z-index: 10;
 }
 
 .movement-row {

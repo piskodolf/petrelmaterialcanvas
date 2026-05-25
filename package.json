@@ -10,9 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@jalez/react-flow-smart-edge": "^4.0.0",
     "@xyflow/react": "^12.10.2",
     "firebase": "^12.13.0",
     "lucide-react": "^1.16.0",
+    "pathfinding": "^0.4.18",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.15.1",
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.3",
+    "@types/pathfinding": "^0.1.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",
