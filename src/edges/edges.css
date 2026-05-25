@@ -93,23 +93,37 @@
 }
 
 .edge-input {
-  background: transparent;
-  border: 1px dashed transparent;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--border-subtle);
   color: var(--text-main);
   font-family: inherit;
   font-size: 0.65rem;
-  width: 70px;
+  width: 75px;
   outline: none;
-  border-radius: 4px;
-  padding: 2px 4px;
+  border-radius: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
-.edge-input:hover, .edge-input:focus {
-  border-color: var(--border-subtle);
-  background: rgba(0, 0, 0, 0.2);
-  width: 90px;
+.edge-input:hover {
+  border-color: var(--accent-primary);
+  background: rgba(15, 23, 42, 0.85);
+  width: 95px;
 }
+
+.edge-input:focus {
+  border-color: var(--accent-primary);
+  background: var(--bg-dark);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+  width: 95px;
+}
+
+/* Ensure selects style nicely as dropdowns */
+select.edge-input {
+  padding-right: 4px;
+}
+
 
 .edge-material-slot {
   width: 20px;
