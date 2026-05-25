@@ -250,10 +250,9 @@ export const MovementEdge = memo(({
               <div className="movement-row" title="Vrsta povezave">
                 <Activity size={12} className="movement-icon" />
                 <select 
-                  className="edge-input" 
+                  className="edge-input nodrag nopan" 
                   value={connectionType}
                   onChange={(e) => updateData('connectionType', e.target.value)}
-                  onPointerDown={onPointerDown}
                   style={{ width: 'auto', paddingRight: '0px' }}
                 >
                   <option value="flow">Naslednja aktivnost</option>
@@ -265,10 +264,9 @@ export const MovementEdge = memo(({
               <div className="movement-row" title="Oblika črte">
                 <Settings size={12} className="movement-icon" style={{ color: 'var(--text-muted)' }} />
                 <select 
-                  className="edge-input" 
+                  className="edge-input nodrag nopan" 
                   value={pathType}
                   onChange={(e) => updateData('pathType', e.target.value)}
-                  onPointerDown={onPointerDown}
                   style={{ width: 'auto', paddingRight: '0px' }}
                 >
                   <option value="bezier">Krivulja</option>
