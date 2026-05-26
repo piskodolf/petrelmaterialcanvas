@@ -4,6 +4,14 @@ import { database } from '../firebase';
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react';
 import type { Node, Edge, NodeChange, EdgeChange } from '@xyflow/react';
 
+const sortNodes = (nds: Node[]): Node[] => {
+  return [...nds].sort((a, b) => {
+    if (a.type === 'department' && b.type !== 'department') return -1;
+    if (a.type !== 'department' && b.type === 'department') return 1;
+    return 0;
+  });
+};
+
 export function useFirebaseSync(flowId: string, initialNodes: Node[], initialEdges: Edge[]) {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
@@ -20,7 +28,7 @@ export function useFirebaseSync(flowId: string, initialNodes: Node[], initialEdg
       
       const data = snapshot.val();
       if (data) {
-        if (data.nodes) setNodes(data.nodes);
+        if (data.nodes) setNodes(sortNodes(data.nodes));
         if (data.edges) setEdges(data.edges);
       }
     });
@@ -31,9 +39,10 @@ export function useFirebaseSync(flowId: string, initialNodes: Node[], initialEdg
   const updateNodes = useCallback((newNodesOrUpdater: Node[] | ((nds: Node[]) => Node[])) => {
     setNodes((currentNodes) => {
       const updated = typeof newNodesOrUpdater === 'function' ? newNodesOrUpdater(currentNodes) : newNodesOrUpdater;
+      const sorted = sortNodes(updated);
       isLocalChange.current = true;
-      set(ref(database, `flows/${flowId}/nodes`), updated);
-      return updated;
+      set(ref(database, `flows/${flowId}/nodes`), sorted);
+      return sorted;
     });
   }, [flowId]);
 
@@ -49,9 +58,10 @@ export function useFirebaseSync(flowId: string, initialNodes: Node[], initialEdg
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((nds) => {
       const updated = applyNodeChanges(changes, nds);
+      const sorted = sortNodes(updated);
       isLocalChange.current = true;
-      set(ref(database, `flows/${flowId}/nodes`), updated);
-      return updated;
+      set(ref(database, `flows/${flowId}/nodes`), sorted);
+      return sorted;
     });
   }, [flowId]);
 
