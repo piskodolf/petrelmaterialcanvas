@@ -86,9 +86,9 @@ export const DepartmentNode = memo(({ id, data, selected }: NodeProps) => {
             title={isCollapsed ? "Razpri subproces" : "Zloži subproces"}
             style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
           >
-            {isCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+            {isCollapsed ? <ChevronDown size={22} /> : <ChevronUp size={22} />}
           </button>
-          <Building2 size={20} className="department-icon" />
+          <Building2 size={26} className="department-icon" />
           <div style={{ position: 'relative', flexGrow: 1, display: 'flex', alignItems: 'center' }}>
             <input 
               className="node-input department-title-input nodrag"
@@ -96,10 +96,10 @@ export const DepartmentNode = memo(({ id, data, selected }: NodeProps) => {
               onBlur={(e) => updateData('label', e.target.value)}
               placeholder="Ime skupine / subprocesa"
             />
-            <Edit2 size={12} className="edit-indicator" />
+            <Edit2 size={16} className="edit-indicator" />
           </div>
           <button className="delete-btn" onClick={onDelete} title="Odstrani skupino">
-            <Trash2 size={16} />
+            <Trash2 size={20} />
           </button>
         </div>
         {!isCollapsed && (
