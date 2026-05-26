@@ -382,6 +382,10 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
       {renderLightbox()}
       {renderPicker()}
       
+      {/* Vertical alignment handles */}
+      <Handle type="target" position={Position.Top} id="input-top" style={{ left: '40%', zIndex: 10 }} className="handle handle-target" />
+      <Handle type="source" position={Position.Top} id="output-top" style={{ left: '60%', zIndex: 10 }} className="handle handle-source" />
+      
       <Handle type="target" position={Position.Left} id="input" className="handle handle-target" />
       
       <div className="storage-node-header">
@@ -441,6 +445,10 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
       </div>
 
       <Handle type="source" position={Position.Right} id="output" className="handle handle-source" />
+      
+      {/* Vertical alignment handles */}
+      <Handle type="target" position={Position.Bottom} id="input-bottom" style={{ left: '40%', zIndex: 10 }} className="handle handle-target" />
+      <Handle type="source" position={Position.Bottom} id="output-bottom" style={{ left: '60%', zIndex: 10 }} className="handle handle-source" />
     </div>
     </>
   );

@@ -408,7 +408,20 @@ export const ProcessNode = memo(({ id, data, selected }: NodeProps) => {
         {renderColumns(inputCols, 'inputColumns')}
       </div>
 
-      <div className="process-node process-node-inner" style={{ borderColor: activeSubprocess ? activeSubprocess.color : undefined }}>
+      <div 
+        className="process-node process-node-inner" 
+        style={{ 
+          position: 'relative',
+          borderColor: activeSubprocess ? activeSubprocess.color : undefined 
+        }}
+      >
+        {/* Vertical alignment handles */}
+        <Handle type="target" position={Position.Top} id="input-top" style={{ left: '40%', zIndex: 10 }} className="handle handle-target" />
+        <Handle type="source" position={Position.Top} id="output-top" style={{ left: '60%', zIndex: 10 }} className="handle handle-source" />
+        
+        <Handle type="target" position={Position.Bottom} id="input-bottom" style={{ left: '40%', zIndex: 10 }} className="handle handle-target" />
+        <Handle type="source" position={Position.Bottom} id="output-bottom" style={{ left: '60%', zIndex: 10 }} className="handle handle-source" />
+
         <div className="process-header" style={activeSubprocess ? { 
           background: `linear-gradient(to right, ${activeSubprocess.color}30, rgba(15, 23, 42, 0))`,
           borderBottomColor: `${activeSubprocess.color}50`
