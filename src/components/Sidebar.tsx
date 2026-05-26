@@ -6,7 +6,7 @@ import type { MaterialItem, SubprocessItem } from '../contexts/MaterialContext';
 
 export const Sidebar = () => {
   const { 
-    library, activeFilter, setActiveFilter, updateMaterialGroup, renameMaterialGroup,
+    library, activeFilter, setActiveFilter, updateMaterialGroup, updateMaterialDescription, renameMaterialGroup,
     savedPerformers, removePerformer, savedTools, removeTool,
     savedSubprocesses, addSubprocess, removeSubprocess, updateSubprocess,
     moveSubprocessUp, moveSubprocessDown,
@@ -14,7 +14,7 @@ export const Sidebar = () => {
   } = useMaterials();
   const { theme, toggleTheme } = useTheme();
   const [editMode, setEditMode] = useState(false);
-  const [editItem, setEditItem] = useState<{ url: string, group: string } | null>(null);
+  const [editItem, setEditItem] = useState<{ url: string, group: string, description: string } | null>(null);
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   
@@ -233,31 +233,65 @@ export const Sidebar = () => {
                 </>
               )}
             </div>
-            <div className="sidebar-library-grid">
-              {items.map((item, i) => (
-                <div key={i} className="library-item-container" style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+            <div className="sidebar-library-rows">
+              {items.map((item, i) => {
+                const isFiltered = activeFilter === item.url;
+                return (
                   <div 
-                    className={`library-item ${activeFilter === item.url ? 'active-filter' : ''}`} 
+                    key={i} 
+                    className={`library-row-item ${isFiltered ? 'active-filter' : ''}`}
                     onClick={() => {
                       if (editMode) {
-                        setEditItem({ url: item.url, group: item.group || 'Neuvrščeno' });
+                        setEditItem({ 
+                          url: item.url, 
+                          group: item.group || 'Neuvrščeno', 
+                          description: item.description || '' 
+                        });
                       } else {
-                        setActiveFilter(activeFilter === item.url ? null : item.url);
+                        setActiveFilter(isFiltered ? null : item.url);
                       }
                     }}
-                    title={editMode ? 'Klikni za urejanje skupine' : 'Prikaži samo procese s tem materialom'}
-                    style={{ cursor: 'pointer', width: '34px', height: '34px', border: editMode ? '1px dashed var(--accent-primary)' : undefined }}
+                    title={editMode ? 'Klikni za urejanje opisa in skupine' : 'Prikaži samo procese s tem materialom'}
                   >
-                    {item.url.startsWith('text:') ? (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1, padding: '2px', color: 'var(--text-main)' }}>
-                        {item.url.substring(5)}
-                      </div>
-                    ) : (
-                      <img src={item.url} alt="Material" className="library-image" style={{ opacity: editMode ? 0.5 : 1 }} />
+                    <div className="library-item-square" style={{ opacity: editMode ? 0.6 : 1 }}>
+                      {item.url.startsWith('text:') ? (
+                        <div style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', padding: '2px', wordBreak: 'break-word', lineHeight: 1, color: 'var(--text-main)' }}>
+                          {item.url.substring(5)}
+                        </div>
+                      ) : (
+                        <img src={item.url} alt="Material" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      )}
+                    </div>
+                    
+                    <div style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <span 
+                        style={{ 
+                          fontSize: '0.78rem', 
+                          fontWeight: 500, 
+                          color: item.description ? 'var(--text-main)' : 'var(--text-muted)',
+                          fontStyle: item.description ? 'normal' : 'italic',
+                          width: '100%',
+                          textAlign: 'left',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                      >
+                        {item.description || 'Brez opisa / klikni za urejanje'}
+                      </span>
+                      {item.url.startsWith('text:') && (
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                          Koda: {item.url.substring(5)}
+                        </span>
+                      )}
+                    </div>
+
+                    {editMode && (
+                      <Edit2 size={12} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
@@ -266,26 +300,47 @@ export const Sidebar = () => {
 
       {editItem && (
         <div className="lightbox-overlay nodrag nopan" onClick={() => setEditItem(null)} style={{ zIndex: 1000 }}>
-          <div className="lightbox-content" onClick={e => e.stopPropagation()} style={{ padding: '24px', minWidth: '250px' }}>
-            <img src={editItem.url} alt="Preview" className="lightbox-preview" style={{ maxHeight: '150px', marginBottom: '16px' }} />
+          <div className="lightbox-content" onClick={e => e.stopPropagation()} style={{ padding: '24px', minWidth: '280px' }}>
+            {editItem.url.startsWith('text:') ? (
+              <div style={{ fontSize: '18px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', padding: '16px', background: 'var(--bg-dark)', borderRadius: '6px', color: 'var(--text-main)', marginBottom: '16px' }}>
+                {editItem.url.substring(5)}
+              </div>
+            ) : (
+              <img src={editItem.url} alt="Preview" className="lightbox-preview" style={{ maxHeight: '150px', marginBottom: '16px', borderRadius: '6px', objectFit: 'cover' }} />
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Ime skupine:</label>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'left' }}>Opis / Ime materiala:</label>
+              <input 
+                type="text" 
+                value={editItem.description} 
+                onChange={(e) => setEditItem({ ...editItem, description: e.target.value })}
+                placeholder="Npr. Bakrena žica"
+                style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-subtle)', background: 'var(--bg-dark)', color: 'var(--text-main)', fontSize: '0.9rem', marginBottom: '8px' }}
+                autoFocus
+              />
+
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'left' }}>Skupina (razvrščanje):</label>
               <input 
                 type="text" 
                 value={editItem.group} 
                 onChange={(e) => setEditItem({ ...editItem, group: e.target.value })}
+                placeholder="Npr. Polizdelki"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     updateMaterialGroup(editItem.url, editItem.group);
+                    updateMaterialDescription(editItem.url, editItem.description);
                     setEditItem(null);
                   }
                 }}
                 style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-subtle)', background: 'var(--bg-dark)', color: 'var(--text-main)', fontSize: '0.9rem' }}
-                autoFocus
               />
               <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                 <button 
-                  onClick={() => { updateMaterialGroup(editItem.url, editItem.group); setEditItem(null); }}
+                  onClick={() => { 
+                    updateMaterialGroup(editItem.url, editItem.group); 
+                    updateMaterialDescription(editItem.url, editItem.description);
+                    setEditItem(null); 
+                  }}
                   style={{ flex: 1, padding: '8px', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
                 >
                   Shrani

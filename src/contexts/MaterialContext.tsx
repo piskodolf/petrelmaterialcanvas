@@ -6,6 +6,7 @@ import { database } from '../firebase';
 export type MaterialItem = {
   url: string;
   group: string;
+  description?: string;
 };
 
 export type SubprocessItem = {
@@ -19,6 +20,7 @@ interface MaterialContextType {
   addMaterialToLibrary: (dataUrl: string, group?: string) => void;
   removeMaterialFromLibrary: (dataUrl: string) => void;
   updateMaterialGroup: (dataUrl: string, newGroup: string) => void;
+  updateMaterialDescription: (dataUrl: string, newDescription: string) => void;
   renameMaterialGroup: (oldGroup: string, newGroup: string) => void;
   activeFilter: string | null;
   setActiveFilter: (dataUrl: string | null) => void;
@@ -207,6 +209,15 @@ export const MaterialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
+  const updateMaterialDescription = (dataUrl: string, newDescription: string) => {
+    if (!user) return;
+    setLibrary((prev) => {
+      const next = prev.map(item => item.url === dataUrl ? { ...item, description: newDescription } : item);
+      set(ref(database, `users/${user.uid}/materials`), next);
+      return next;
+    });
+  };
+
   const renameMaterialGroup = (oldGroup: string, newGroup: string) => {
     if (!newGroup || newGroup.trim() === '' || !user) return;
     setLibrary((prev) => {
@@ -286,7 +297,7 @@ export const MaterialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <MaterialContext.Provider value={{ 
       library, addMaterialToLibrary, removeMaterialFromLibrary, 
-      updateMaterialGroup, renameMaterialGroup, activeFilter, setActiveFilter,
+      updateMaterialGroup, updateMaterialDescription, renameMaterialGroup, activeFilter, setActiveFilter,
       savedPerformers, addPerformer, removePerformer, savedTools, addTool, removeTool,
       savedSubprocesses, addSubprocess, removeSubprocess, updateSubprocess,
       moveSubprocessUp, moveSubprocessDown,
