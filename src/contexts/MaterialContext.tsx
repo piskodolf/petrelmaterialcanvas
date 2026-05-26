@@ -24,6 +24,7 @@ interface MaterialContextType {
   renameMaterialGroup: (oldGroup: string, newGroup: string) => void;
   moveMaterialUp: (dataUrl: string) => void;
   moveMaterialDown: (dataUrl: string) => void;
+  reorderMaterial: (draggedUrl: string, targetUrl: string) => void;
   sortMaterialsAlphabetically: () => void;
   activeFilter: string | null;
   setActiveFilter: (dataUrl: string | null) => void;
@@ -230,6 +231,34 @@ export const MaterialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
+  const reorderMaterial = (draggedUrl: string, targetUrl: string) => {
+    if (!user || draggedUrl === targetUrl) return;
+    setLibrary((prev) => {
+      const draggedIndex = prev.findIndex(item => item.url === draggedUrl);
+      const targetIndex = prev.findIndex(item => item.url === targetUrl);
+      if (draggedIndex < 0 || targetIndex < 0) return prev;
+
+      const next = [...prev];
+      const draggedItem = { ...next[draggedIndex] };
+      const targetItem = next[targetIndex];
+      
+      // Update group of dragged item to target item's group
+      draggedItem.group = targetItem.group || 'Neuvrščeno';
+
+      // Remove from old position
+      next.splice(draggedIndex, 1);
+      
+      // Find new target index after removal
+      const newTargetIndex = next.findIndex(item => item.url === targetUrl);
+      
+      // Insert at new position
+      next.splice(newTargetIndex, 0, draggedItem);
+
+      set(ref(database, `users/${user.uid}/materials`), next);
+      return next;
+    });
+  };
+
   const moveMaterialUp = (dataUrl: string) => {
     if (!user) return;
     setLibrary((prev) => {
@@ -382,7 +411,7 @@ export const MaterialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <MaterialContext.Provider value={{ 
       library, addMaterialToLibrary, removeMaterialFromLibrary, 
       updateMaterialGroup, updateMaterialDescription, renameMaterialGroup, 
-      moveMaterialUp, moveMaterialDown, sortMaterialsAlphabetically,
+      moveMaterialUp, moveMaterialDown, reorderMaterial, sortMaterialsAlphabetically,
       activeFilter, setActiveFilter,
       savedPerformers, addPerformer, removePerformer, savedTools, addTool, removeTool,
       savedSubprocesses, addSubprocess, removeSubprocess, updateSubprocess,

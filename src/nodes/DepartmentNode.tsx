@@ -53,13 +53,23 @@ export const DepartmentNode = memo(({ id, data, selected }: NodeProps) => {
         />
       )}
       <div className="custom-drag-handle" title="Primi tukaj za premik oddelka" style={{ 
-        position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)', 
-        cursor: 'grab', display: 'flex', alignItems: 'center', 
-        background: 'var(--bg-dark)', padding: '2px 24px', borderRadius: '6px 6px 0 0', 
-        border: '1px solid var(--border-subtle)', borderBottom: 'none', color: 'var(--text-muted)',
+        position: 'absolute', 
+        top: -32, 
+        left: '50%', 
+        transform: 'translateX(-50%)', 
+        cursor: 'grab', 
+        display: 'flex', 
+        alignItems: 'center', 
+        background: 'var(--bg-node)', 
+        padding: '6px 48px', 
+        borderRadius: '8px 8px 0 0', 
+        border: '2px solid var(--accent-primary)', 
+        borderBottom: 'none', 
+        color: 'var(--accent-primary)',
+        boxShadow: 'var(--shadow-node)',
         zIndex: 10
       }}>
-        <GripHorizontal size={18} />
+        <GripHorizontal size={24} />
       </div>
 
       <div 
