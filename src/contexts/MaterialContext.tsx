@@ -22,6 +22,9 @@ interface MaterialContextType {
   updateMaterialGroup: (dataUrl: string, newGroup: string) => void;
   updateMaterialDescription: (dataUrl: string, newDescription: string) => void;
   renameMaterialGroup: (oldGroup: string, newGroup: string) => void;
+  moveMaterialUp: (dataUrl: string) => void;
+  moveMaterialDown: (dataUrl: string) => void;
+  sortMaterialsAlphabetically: () => void;
   activeFilter: string | null;
   setActiveFilter: (dataUrl: string | null) => void;
   savedPerformers: string[];
@@ -227,6 +230,87 @@ export const MaterialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
+  const moveMaterialUp = (dataUrl: string) => {
+    if (!user) return;
+    setLibrary((prev) => {
+      const index = prev.findIndex(item => item.url === dataUrl);
+      if (index < 0) return prev;
+      
+      const item = prev[index];
+      const groupName = item.group || 'Neuvrščeno';
+      
+      let prevIndex = -1;
+      for (let i = index - 1; i >= 0; i--) {
+        const otherGroup = prev[i].group || 'Neuvrščeno';
+        if (otherGroup === groupName) {
+          prevIndex = i;
+          break;
+        }
+      }
+      
+      if (prevIndex < 0) return prev;
+      
+      const next = [...prev];
+      [next[prevIndex], next[index]] = [next[index], next[prevIndex]];
+      
+      set(ref(database, `users/${user.uid}/materials`), next);
+      return next;
+    });
+  };
+
+  const moveMaterialDown = (dataUrl: string) => {
+    if (!user) return;
+    setLibrary((prev) => {
+      const index = prev.findIndex(item => item.url === dataUrl);
+      if (index < 0) return prev;
+      
+      const item = prev[index];
+      const groupName = item.group || 'Neuvrščeno';
+      
+      let nextIndex = -1;
+      for (let i = index + 1; i < prev.length; i++) {
+        const otherGroup = prev[i].group || 'Neuvrščeno';
+        if (otherGroup === groupName) {
+          nextIndex = i;
+          break;
+        }
+      }
+      
+      if (nextIndex < 0) return prev;
+      
+      const next = [...prev];
+      [next[nextIndex], next[index]] = [next[index], next[nextIndex]];
+      
+      set(ref(database, `users/${user.uid}/materials`), next);
+      return next;
+    });
+  };
+
+  const sortMaterialsAlphabetically = () => {
+    if (!user) return;
+    setLibrary((prev) => {
+      // Sort within the list, preserving groups but ordering by description / url name
+      const next = [...prev].sort((a, b) => {
+        // First group by group name
+        const groupA = a.group || 'Neuvrščeno';
+        const groupB = b.group || 'Neuvrščeno';
+        
+        if (groupA !== groupB) {
+          return groupA.localeCompare(groupB, 'sl');
+        }
+        
+        // Inside same group, sort by description
+        const descA = a.description || (a.url.startsWith('text:') ? a.url.substring(5) : 'ZZZ_BrezOpisa');
+        const descB = b.description || (b.url.startsWith('text:') ? b.url.substring(5) : 'ZZZ_BrezOpisa');
+        
+        return descA.localeCompare(descB, 'sl');
+      });
+      
+      set(ref(database, `users/${user.uid}/materials`), next);
+      return next;
+    });
+  };
+
   const addSubprocess = (name: string, color: string) => {
     if (!name || name.trim() === '' || !user) return;
     setSavedSubprocesses(prev => {
@@ -297,7 +381,9 @@ export const MaterialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <MaterialContext.Provider value={{ 
       library, addMaterialToLibrary, removeMaterialFromLibrary, 
-      updateMaterialGroup, updateMaterialDescription, renameMaterialGroup, activeFilter, setActiveFilter,
+      updateMaterialGroup, updateMaterialDescription, renameMaterialGroup, 
+      moveMaterialUp, moveMaterialDown, sortMaterialsAlphabetically,
+      activeFilter, setActiveFilter,
       savedPerformers, addPerformer, removePerformer, savedTools, addTool, removeTool,
       savedSubprocesses, addSubprocess, removeSubprocess, updateSubprocess,
       moveSubprocessUp, moveSubprocessDown,

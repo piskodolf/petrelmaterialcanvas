@@ -7,6 +7,7 @@ import type { MaterialItem, SubprocessItem } from '../contexts/MaterialContext';
 export const Sidebar = () => {
   const { 
     library, activeFilter, setActiveFilter, updateMaterialGroup, updateMaterialDescription, renameMaterialGroup,
+    moveMaterialUp, moveMaterialDown, sortMaterialsAlphabetically,
     savedPerformers, removePerformer, savedTools, removeTool,
     savedSubprocesses, addSubprocess, removeSubprocess, updateSubprocess,
     moveSubprocessUp, moveSubprocessDown,
@@ -177,27 +178,47 @@ export const Sidebar = () => {
           Baza Materialov
         </div>
         {library.length > 0 && (
-          <button 
-            onClick={() => setEditMode(!editMode)} 
-            style={{ 
-              background: editMode ? 'rgba(56, 189, 248, 0.2)' : 'transparent', 
-              border: `1px solid ${editMode ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, 
-              color: editMode ? 'var(--accent-primary)' : 'var(--text-main)', 
-              padding: '4px 8px', 
-              borderRadius: '4px', 
-              cursor: 'pointer', 
-              fontSize: '0.75rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-          >
-            {editMode ? <><Check size={12}/> Končaj</> : <><Edit2 size={12}/> Uredi</>}
-          </button>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              onClick={() => sortMaterialsAlphabetically()}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-muted)',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              title="Razvrsti po abecedi znotraj skupin"
+            >
+              Sortiraj
+            </button>
+            <button 
+              onClick={() => setEditMode(!editMode)} 
+              style={{ 
+                background: editMode ? 'rgba(56, 189, 248, 0.2)' : 'transparent', 
+                border: `1px solid ${editMode ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, 
+                color: editMode ? 'var(--accent-primary)' : 'var(--text-main)', 
+                padding: '4px 8px', 
+                borderRadius: '4px', 
+                cursor: 'pointer', 
+                fontSize: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              {editMode ? <><Check size={12}/> Končaj</> : <><Edit2 size={12}/> Uredi</>}
+            </button>
+          </div>
         )}
       </div>
       <div className="sidebar-description" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-        {editMode ? 'Klikni na sliko za premik ali ikono za preimenovanje skupine.' : 'Klikni na material za filtriranje po procesu.'}
+        {editMode ? 'Premikaj materiale s puščicami ali uredi opis in skupino.' : 'Klikni na sličico za filtriranje ali na vrstico za urejanje.'}
       </div>
       
       <div className="sidebar-library-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -241,19 +262,23 @@ export const Sidebar = () => {
                     key={i} 
                     className={`library-row-item ${isFiltered ? 'active-filter' : ''}`}
                     onClick={() => {
-                      if (editMode) {
-                        setEditItem({ 
-                          url: item.url, 
-                          group: item.group || 'Neuvrščeno', 
-                          description: item.description || '' 
-                        });
-                      } else {
-                        setActiveFilter(isFiltered ? null : item.url);
-                      }
+                      setEditItem({ 
+                        url: item.url, 
+                        group: item.group || 'Neuvrščeno', 
+                        description: item.description || '' 
+                      });
                     }}
-                    title={editMode ? 'Klikni za urejanje opisa in skupine' : 'Prikaži samo procese s tem materialom'}
+                    title="Klikni za urejanje opisa in skupine"
                   >
-                    <div className="library-item-square" style={{ opacity: editMode ? 0.6 : 1 }}>
+                    <div 
+                      className="library-item-square" 
+                      style={{ opacity: editMode ? 0.6 : 1 }}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent opening the edit modal!
+                        setActiveFilter(isFiltered ? null : item.url);
+                      }}
+                      title="Klikni za filtriranje po tem materialu"
+                    >
                       {item.url.startsWith('text:') ? (
                         <div style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', padding: '2px', wordBreak: 'break-word', lineHeight: 1, color: 'var(--text-main)' }}>
                           {item.url.substring(5)}
@@ -277,7 +302,7 @@ export const Sidebar = () => {
                           textOverflow: 'ellipsis'
                         }}
                       >
-                        {item.description || 'Brez opisa / klikni za urejanje'}
+                        {item.description || 'Brez opisa / klikni za vpis...'}
                       </span>
                       {item.url.startsWith('text:') && (
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
@@ -286,8 +311,25 @@ export const Sidebar = () => {
                       )}
                     </div>
 
-                    {editMode && (
-                      <Edit2 size={12} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+                    {editMode ? (
+                      <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                        <button 
+                          onClick={() => moveMaterialUp(item.url)} 
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }} 
+                          title="Premakni gor"
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <button 
+                          onClick={() => moveMaterialDown(item.url)} 
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }} 
+                          title="Premakni dol"
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <Edit2 size={11} style={{ color: 'var(--text-muted)', opacity: 0.4, flexShrink: 0 }} />
                     )}
                   </div>
                 );
