@@ -25,13 +25,14 @@ import { Sidebar } from './Sidebar';
 import { useMaterials } from '../contexts/MaterialContext';
 import { useFirebaseSync } from '../hooks/useFirebaseSync';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share2, Download, Upload, AlertTriangle, FileText, Network } from 'lucide-react';
+import { ArrowLeft, Share2, Download, Upload, AlertTriangle, FileText, Network, Workflow } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { IssuesModal } from './IssuesModal';
 import { IssuesOverviewModal } from './IssuesOverviewModal';
 import { exportToExcel, importFromExcel } from '../utils/excelUtils';
 import { exportToWord } from '../utils/wordExport';
 import { SubprocessFlowView } from './SubprocessFlowView';
+import { SubprocessMapModal } from './SubprocessMapModal';
 import { ActiveUsers } from './ActiveUsers';
 
 const nodeTypes = {
@@ -98,6 +99,7 @@ export const FlowCanvas = () => {
   const { nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange } = useFirebaseSync(flowId || 'default_flow', initialNodes, initialEdges);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [subprocessViewOpen, setSubprocessViewOpen] = useState<boolean>(false);
+  const [subprocessMapOpen, setSubprocessMapOpen] = useState<boolean>(false);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => {
@@ -889,6 +891,14 @@ export const FlowCanvas = () => {
                 Zaporedni pogled
               </button>
               <button 
+                onClick={() => setSubprocessMapOpen(true)}
+                className="glass-panel" 
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-main)', cursor: 'pointer', borderRadius: '8px' }}
+              >
+                <Workflow size={16} style={{ color: 'var(--accent-secondary)' }} />
+                Zemljevid subprocesov
+              </button>
+              <button 
                 onClick={() => exportToExcel(nodes, edges)}
                 className="glass-panel" 
                 style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-main)', cursor: 'pointer', borderRadius: '8px' }}
@@ -960,6 +970,14 @@ export const FlowCanvas = () => {
       {subprocessViewOpen && (
         <SubprocessFlowView 
           onClose={() => setSubprocessViewOpen(false)} 
+          nodes={nodes} 
+          edges={edges} 
+        />
+      )}
+      {subprocessMapOpen && (
+        <SubprocessMapModal 
+          isOpen={subprocessMapOpen}
+          onClose={() => setSubprocessMapOpen(false)} 
           nodes={nodes} 
           edges={edges} 
         />

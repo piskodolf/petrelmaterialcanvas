@@ -847,7 +847,6 @@ function addBridgesToPath(
   draggingNode?: any
 ): string {
   const mySegments = getPathSegments(pathStr);
-  console.log('[BridgeDebug] ' + currentEdgeId + ' mySegments:', mySegments.length, 'pathStr:', pathStr);
   if (mySegments.length === 0) return pathStr;
   
   const myEdge = allEdges.find(e => e.id === currentEdgeId);
@@ -915,7 +914,6 @@ function addBridgesToPath(
   otherEdgesObj.forEach(e => {
     otherSegs.push(...getEdgeSegments(e, nodes, draggingNode));
   });
-  console.log('[BridgeDebug] ' + currentEdgeId + ' otherEdgesObj:', otherEdgesObj.map(e => e.id), 'otherSegs:', otherSegs.length);
   if (otherSegs.length === 0) return pathStr;
   
   let newPathStr = `M ${mySegments[0].x1} ${mySegments[0].y1}`;
@@ -931,10 +929,6 @@ function addBridgesToPath(
         intersections.push(pt);
       }
     });
-    
-    if (intersections.length > 0) {
-      console.log('[BridgeDebug] ' + currentEdgeId + ' intersections found:', intersections);
-    }
     
     if (intersections.length === 0) {
       newPathStr += ` L ${seg.x2} ${seg.y2}`;
@@ -998,7 +992,6 @@ function addBridgesToPath(
     newPathStr += ` L ${seg.x2} ${seg.y2}`;
   });
   
-  console.log('[BridgeDebug] ' + currentEdgeId + ' return path:', newPathStr);
   return newPathStr;
 }
 
