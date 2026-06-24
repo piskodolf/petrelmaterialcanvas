@@ -30,8 +30,8 @@ export const IssuesModal: React.FC<IssuesModalProps> = ({ nodeId, edgeId, onClos
   if (!target) return null;
 
   const label = isEdge
-    ? (target.data?.materialUrl 
-        ? (target.data.materialUrl.startsWith('text:') ? target.data.materialUrl.substring(5) : 'Povezava s slikico')
+    ? ((target.data as any)?.materialUrl 
+        ? ((target.data as any).materialUrl.startsWith('text:') ? (target.data as any).materialUrl.substring(5) : 'Povezava s slikico')
         : 'Povezava')
     : (target.data?.label as string || 'Neimenovan element');
 

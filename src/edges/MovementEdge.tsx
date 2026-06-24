@@ -478,9 +478,9 @@ export const MovementEdge = memo(({
                 >
                   <AlertTriangle size={14} />
                   Izzivi, odpadki & vprašanja
-                  {Boolean(data?.issues && (data.issues as any[]).length > 0) && (
+                  {Boolean(data?.issues && ((data?.issues || []) as any[]).length > 0) && (
                     <span style={{ background: 'var(--accent-warning)', color: '#000', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', marginLeft: '4px' }}>
-                      {((data.issues as any[]).length).toString()}
+                      {(((data?.issues || []) as any[]).length).toString()}
                     </span>
                   )}
                 </button>
@@ -502,20 +502,20 @@ export const MovementEdge = memo(({
                   <img src={data?.materialUrl as string} alt="Material" style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover' }} title="Polizdelek" />
                 )
               )}
-              {Boolean(data?.issues && (data.issues as any[]).filter(i => i.type !== 'vprasanje').length > 0) && (
+              {Boolean(data?.issues && ((data?.issues || []) as any[]).filter(i => i.type !== 'vprasanje').length > 0) && (
                 <span 
                   style={{ background: 'var(--accent-warning)', color: '#000', padding: '1px 5px', borderRadius: '8px', fontSize: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '2px' }}
-                  title={`${(data.issues as any[]).filter(i => i.type !== 'vprasanje').length} izzivov/odpadkov`}
+                  title={`${((data?.issues || []) as any[]).filter(i => i.type !== 'vprasanje').length} izzivov/odpadkov`}
                 >
-                  <AlertTriangle size={8} /> {((data.issues as any[]).filter(i => i.type !== 'vprasanje').length).toString()}
+                  <AlertTriangle size={8} /> {(((data?.issues || []) as any[]).filter(i => i.type !== 'vprasanje').length).toString()}
                 </span>
               )}
-              {Boolean(data?.issues && (data.issues as any[]).filter(i => i.type === 'vprasanje').length > 0) && (
+              {Boolean(data?.issues && ((data?.issues || []) as any[]).filter(i => i.type === 'vprasanje').length > 0) && (
                 <span 
                   style={{ background: '#3b82f6', color: '#fff', padding: '1px 5px', borderRadius: '8px', fontSize: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '2px' }}
-                  title={`${(data.issues as any[]).filter(i => i.type === 'vprasanje').length} odprtih vprašanj`}
+                  title={`${((data?.issues || []) as any[]).filter(i => i.type === 'vprasanje').length} odprtih vprašanj`}
                 >
-                  <HelpCircle size={8} /> {((data.issues as any[]).filter(i => i.type === 'vprasanje').length).toString()}
+                  <HelpCircle size={8} /> {(((data?.issues || []) as any[]).filter(i => i.type === 'vprasanje').length).toString()}
                 </span>
               )}
             </div>
@@ -847,6 +847,7 @@ function addBridgesToPath(
   draggingNode?: any
 ): string {
   const mySegments = getPathSegments(pathStr);
+  console.log('[BridgeDebug] ' + currentEdgeId + ' mySegments:', mySegments.length, 'pathStr:', pathStr);
   if (mySegments.length === 0) return pathStr;
   
   const myEdge = allEdges.find(e => e.id === currentEdgeId);
@@ -914,7 +915,7 @@ function addBridgesToPath(
   otherEdgesObj.forEach(e => {
     otherSegs.push(...getEdgeSegments(e, nodes, draggingNode));
   });
-  
+  console.log('[BridgeDebug] ' + currentEdgeId + ' otherEdgesObj:', otherEdgesObj.map(e => e.id), 'otherSegs:', otherSegs.length);
   if (otherSegs.length === 0) return pathStr;
   
   let newPathStr = `M ${mySegments[0].x1} ${mySegments[0].y1}`;
@@ -930,6 +931,10 @@ function addBridgesToPath(
         intersections.push(pt);
       }
     });
+    
+    if (intersections.length > 0) {
+      console.log('[BridgeDebug] ' + currentEdgeId + ' intersections found:', intersections);
+    }
     
     if (intersections.length === 0) {
       newPathStr += ` L ${seg.x2} ${seg.y2}`;
@@ -993,6 +998,7 @@ function addBridgesToPath(
     newPathStr += ` L ${seg.x2} ${seg.y2}`;
   });
   
+  console.log('[BridgeDebug] ' + currentEdgeId + ' return path:', newPathStr);
   return newPathStr;
 }
 

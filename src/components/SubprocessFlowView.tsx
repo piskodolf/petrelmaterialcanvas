@@ -143,7 +143,7 @@ export const SubprocessFlowView: React.FC<SubprocessFlowViewProps> = ({ onClose,
         {!selectedSubId ? (
           // Unselected Empty State
           <div style={{ textAlign: 'center', maxWidth: '400px' }}>
-            <div style={{ margin: '0 auto 20px auto', width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.03)', border: '2px dashed rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContext: 'center', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ margin: '0 auto 20px auto', width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.03)', border: '2px dashed rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Play size={32} style={{ color: '#64748b', marginLeft: '4px' }} />
             </div>
             <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', color: '#f1f5f9' }}>Začnite s sprehodom</h3>

@@ -572,7 +572,7 @@ export const ProcessNode = memo(({ id, data, selected }: NodeProps) => {
     const currentVariantId = currentCol?.variantId ?? null;
 
     // Look up material from library
-    const libItem = src ? library.find(m => m.src === src || m.url === src) : null;
+    const libItem = src ? library.find((m: any) => m.src === src || m.url === src) : null;
     const hasVariants = libItem?.variants && libItem.variants.length > 0;
 
     const changeVariant = (variantId: string | null, variantLabel: string | null) => {
