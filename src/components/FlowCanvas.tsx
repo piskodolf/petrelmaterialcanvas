@@ -25,11 +25,13 @@ import { Sidebar } from './Sidebar';
 import { useMaterials } from '../contexts/MaterialContext';
 import { useFirebaseSync } from '../hooks/useFirebaseSync';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share2, Download, Upload, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Share2, Download, Upload, AlertTriangle, FileText, Network } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { IssuesModal } from './IssuesModal';
 import { IssuesOverviewModal } from './IssuesOverviewModal';
 import { exportToExcel, importFromExcel } from '../utils/excelUtils';
+import { exportToWord } from '../utils/wordExport';
+import { SubprocessFlowView } from './SubprocessFlowView';
 import { ActiveUsers } from './ActiveUsers';
 
 const nodeTypes = {
@@ -46,10 +48,31 @@ const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
 
 export const FlowCanvas = () => {
+  const getNodeDimensions = (n: Node) => {
+    if (n.type === 'department') {
+      return {
+        width: parseFloat(n.style?.width as string) || n.measured?.width || n.width || 300,
+        height: parseFloat(n.style?.height as string) || n.measured?.height || n.height || 200,
+      };
+    }
+    if (n.type === 'storage') {
+      return {
+        width: n.measured?.width || n.width || 260,
+        height: n.measured?.height || n.height || 250,
+      };
+    }
+    // Default to process node
+    return {
+      width: n.measured?.width || n.width || 250,
+      height: n.measured?.height || n.height || 120,
+    };
+  };
+
   const { flowId } = useParams();
   const navigate = useNavigate();
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [issuesNodeId, setIssuesNodeId] = useState<string | null>(null);
+  const [issuesEdgeId, setIssuesEdgeId] = useState<string | null>(null);
   const [issuesOverviewOpen, setIssuesOverviewOpen] = useState(false);
 
   useEffect(() => {
@@ -57,15 +80,24 @@ export const FlowCanvas = () => {
       const customEvent = e as CustomEvent<{ nodeId: string }>;
       setIssuesNodeId(customEvent.detail.nodeId);
     };
+    const handleOpenEdgeIssues = (e: Event) => {
+      const customEvent = e as CustomEvent<{ edgeId: string }>;
+      setIssuesEdgeId(customEvent.detail.edgeId);
+    };
     window.addEventListener('openNodeIssues', handleOpenIssues);
-    return () => window.removeEventListener('openNodeIssues', handleOpenIssues);
+    window.addEventListener('openEdgeIssues', handleOpenEdgeIssues);
+    return () => {
+      window.removeEventListener('openNodeIssues', handleOpenIssues);
+      window.removeEventListener('openEdgeIssues', handleOpenEdgeIssues);
+    };
   }, []);
   const { getIntersectingNodes, getNodes } = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   
-  const { hiddenSubprocesses } = useMaterials();
+  const { hiddenSubprocesses, savedSubprocesses } = useMaterials();
   const { nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange } = useFirebaseSync(flowId || 'default_flow', initialNodes, initialEdges);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [subprocessViewOpen, setSubprocessViewOpen] = useState<boolean>(false);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => {
@@ -76,22 +108,41 @@ export const FlowCanvas = () => {
       if (sourceNode && params.sourceHandle) {
         if (params.sourceHandle.startsWith('output-col-')) {
           const parts = params.sourceHandle.split('-');
-          const colIndex = parseInt(parts[2], 10);
-          const slotIndex = parseInt(parts[4], 10);
+          let colIndex = 0;
+          let slotIndex = 0;
+          let isLeftSource = false;
+          
+          if (parts[2] === 'left') {
+            isLeftSource = true;
+            colIndex = parseInt(parts[3], 10);
+            slotIndex = parseInt(parts[5], 10);
+          } else {
+            colIndex = parseInt(parts[2], 10);
+            slotIndex = parseInt(parts[4], 10);
+          }
           
           if (sourceNode.type === 'process') {
-            let cols = Array.isArray(sourceNode.data.outputColumns) ? sourceNode.data.outputColumns : [];
-            if (cols.length === 0 && Array.isArray(sourceNode.data.materialsAfter)) {
-              cols = sourceNode.data.materialsAfter.map((mat: any) => ({ materialUrl: mat, items: [] }));
+            let cols: any[] = [];
+            if (isLeftSource) {
+              cols = Array.isArray(sourceNode.data.inputColumns) ? (sourceNode.data.inputColumns as any[]) : [];
+              if (cols.length === 0 && Array.isArray(sourceNode.data.materialsBefore)) {
+                cols = (sourceNode.data.materialsBefore as any[]).map((mat: any) => ({ materialUrl: mat, items: [] }));
+              }
+            } else {
+              cols = Array.isArray(sourceNode.data.outputColumns) ? (sourceNode.data.outputColumns as any[]) : [];
+              if (cols.length === 0 && Array.isArray(sourceNode.data.materialsAfter)) {
+                cols = (sourceNode.data.materialsAfter as any[]).map((mat: any) => ({ materialUrl: mat, items: [] }));
+              }
             }
+            
             const col = cols[colIndex];
             if (col) {
               materialUrl = (Array.isArray(col.items) ? col.items[slotIndex] : null) || col.materialUrl;
             }
           } else if (sourceNode.type === 'storage') {
-            let cols = Array.isArray(sourceNode.data.columns) ? sourceNode.data.columns : [];
+            let cols = Array.isArray(sourceNode.data.columns) ? (sourceNode.data.columns as any[]) : [];
             if (cols.length === 0 && Array.isArray(sourceNode.data.materials)) {
-              cols = sourceNode.data.materials.map((mat: any) => ({ materialUrl: mat, items: [] }));
+              cols = (sourceNode.data.materials as any[]).map((mat: any) => ({ materialUrl: mat, items: [] }));
             }
             const col = cols[colIndex];
             if (col) {
@@ -101,7 +152,7 @@ export const FlowCanvas = () => {
         } else {
           // Fallback to first material if dragged from generic output handle or if sourceHandle is null
           const srcKey = sourceNode.type === 'process' ? 'outputColumns' : 'columns';
-          let cols = Array.isArray(sourceNode.data[srcKey]) ? sourceNode.data[srcKey] : [];
+          let cols = Array.isArray(sourceNode.data[srcKey]) ? (sourceNode.data[srcKey] as any[]) : [];
           if (cols.length === 0) {
             const fbKey = sourceNode.type === 'process' ? 'materialsAfter' : 'materials';
             if (Array.isArray(sourceNode.data[fbKey])) {
@@ -120,7 +171,7 @@ export const FlowCanvas = () => {
       }
 
       const targetNode = currentNodes.find(n => n.id === params.target);
-      const isGenericDrop = !params.targetHandle || params.targetHandle === 'input';
+      const isGenericDrop = !params.targetHandle || !params.targetHandle.startsWith('input-col-');
       const safeTargetHandle = params.targetHandle || 'input';
 
       setEdges((eds) => {
@@ -152,14 +203,24 @@ export const FlowCanvas = () => {
         setNodes((nds) => {
           return nds.map(n => {
             if (n.id === params.target) {
-              const targetKey = n.type === 'process' ? 'inputColumns' : 'columns';
-              let currentCols = Array.isArray(n.data[targetKey]) ? [...n.data[targetKey]] : [];
+              let targetKey = n.type === 'process' ? 'inputColumns' : 'columns';
+              let isRightTarget = false;
+              if (n.type === 'process' && params.targetHandle && params.targetHandle.includes('-right-')) {
+                targetKey = 'outputColumns';
+                isRightTarget = true;
+              }
+              
+              let currentCols = Array.isArray(n.data[targetKey]) ? [...(n.data[targetKey] as any[])] : [];
               
               if (currentCols.length === 0) {
-                if (n.type === 'process' && Array.isArray(n.data.materialsBefore)) {
-                  currentCols = n.data.materialsBefore.map((mat: any) => ({ materialUrl: mat, capacity: (n.data.storageBefore as number) || 1, items: Array((n.data.storageBefore as number) || 1).fill(null) }));
+                if (n.type === 'process') {
+                  if (targetKey === 'inputColumns' && Array.isArray(n.data.materialsBefore)) {
+                    currentCols = (n.data.materialsBefore as any[]).map((mat: any) => ({ materialUrl: mat, capacity: (n.data.storageBefore as number) || 1, items: Array((n.data.storageBefore as number) || 1).fill(null) }));
+                  } else if (targetKey === 'outputColumns' && Array.isArray(n.data.materialsAfter)) {
+                    currentCols = (n.data.materialsAfter as any[]).map((mat: any) => ({ materialUrl: mat, capacity: (n.data.storageAfter as number) || 1, items: Array((n.data.storageAfter as number) || 1).fill(null) }));
+                  }
                 } else if (n.type === 'storage' && Array.isArray(n.data.materials)) {
-                  currentCols = n.data.materials.map((mat: any) => ({ materialUrl: mat, capacity: (n.data.storageCount as number) || 1, items: Array((n.data.storageCount as number) || 1).fill(null) }));
+                  currentCols = (n.data.materials as any[]).map((mat: any) => ({ materialUrl: mat, capacity: (n.data.storageCount as number) || 1, items: Array((n.data.storageCount as number) || 1).fill(null) }));
                 }
               }
 
@@ -169,8 +230,15 @@ export const FlowCanvas = () => {
               } else if (params.targetHandle && params.targetHandle.startsWith('input-col-')) {
                 // User dropped onto existing slot
                 const parts = params.targetHandle.split('-');
-                const colIndex = parseInt(parts[2], 10);
-                const slotIndex = parseInt(parts[4], 10);
+                let colIndex = 0;
+                let slotIndex = 0;
+                if (isRightTarget) {
+                  colIndex = parseInt(parts[3], 10);
+                  slotIndex = parseInt(parts[5], 10);
+                } else {
+                  colIndex = parseInt(parts[2], 10);
+                  slotIndex = parseInt(parts[4], 10);
+                }
                 
                 if (currentCols[colIndex]) {
                   const col = { ...currentCols[colIndex] };
@@ -217,8 +285,8 @@ export const FlowCanvas = () => {
       // Check if dropped inside a department
       const targetNode = nodes.find((n) => {
         if (n.type !== 'department') return false;
-        const width = n.measured?.width ?? n.width ?? 300;
-        const height = n.measured?.height ?? n.height ?? 200;
+        const width = parseFloat(n.style?.width as string) || n.measured?.width || n.width || 300;
+        const height = parseFloat(n.style?.height as string) || n.measured?.height || n.height || 200;
         return (
           position.x >= n.position.x &&
           position.x <= n.position.x + width &&
@@ -250,9 +318,9 @@ export const FlowCanvas = () => {
       const newNode: Node = {
         id: newNodeId,
         type,
-        position: targetNode ? { x: position.x - targetNode.position.x, y: position.y - targetNode.position.y } : position,
+        position: targetNode ? { x: position.x - targetNode.position.x, y: Math.max(170, position.y - targetNode.position.y) } : position,
         data: defaultData,
-        zIndex: type === 'department' ? -1 : 1,
+        zIndex: type === 'department' ? 0 : 1,
       };
 
       if (targetNode) {
@@ -289,7 +357,7 @@ export const FlowCanvas = () => {
 
     const PADDING_X = 140; // Razmik med procesi vodoravno
     const PADDING_Y = 60;  // Razmik med procesi navpično (vzporedno)
-    let currentY = 60;
+    let currentY = 170;
 
     const newEdges = [...currentEdges];
     const nextNodes = currentNodes.map(n => ({ ...n }));
@@ -352,8 +420,7 @@ export const FlowCanvas = () => {
         let minHeight = currentHeight;
 
         children.forEach(c => {
-          const cWidth = c.measured?.width || c.width || 250;
-          const cHeight = c.measured?.height || c.height || 120;
+          const { width: cWidth, height: cHeight } = getNodeDimensions(c);
           
           // Child's position is relative to parent
           const childRight = c.position.x + cWidth + 30; // 30px padding
@@ -380,75 +447,314 @@ export const FlowCanvas = () => {
     return changed ? nextNodes : currentNodes;
   };
 
-  const onNodeDragStop = useCallback(
+  const onNodeDragStart = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if (node.type === 'department') return;
+      if (node.type !== 'department') return;
 
-      const intersections = getIntersectingNodes(node).filter((n) => n.type === 'department');
-      const targetDepartment = intersections[0];
+      const { width: deptWidth, height: deptHeight } = getNodeDimensions(node);
+      const deptLeft = node.position.x;
+      const deptTop = node.position.y;
+      const deptRight = deptLeft + deptWidth;
+      const deptBottom = deptTop + deptHeight;
 
-      let absolutePosition = { ...node.position };
-      if (node.parentId) {
-        const oldParent = nodes.find((n) => n.id === node.parentId);
-        if (oldParent) {
-          absolutePosition.x += oldParent.position.x;
-          absolutePosition.y += oldParent.position.y;
-        }
-      }
+      let changed = false;
+      const nextNodes = nodes.map((n) => {
+        if (n.type === 'department') return n;
 
-      const oldParentId = node.parentId;
-      const newParentId = targetDepartment ? targetDepartment.id : undefined;
-
-      let nextNodes = nodes.map((n) => {
-        if (n.id === node.id) {
-          if (targetDepartment && n.parentId !== targetDepartment.id) {
-            return {
-              ...n,
-              parentId: targetDepartment.id,
-              position: {
-                x: absolutePosition.x - targetDepartment.position.x,
-                y: absolutePosition.y - targetDepartment.position.y,
-              }
-            };
-          } else if (!targetDepartment && n.parentId) {
-             // Keep in the same parent so expandParentIfNeeded can resize it
-             const parentNode = nodes.find(p => p.id === n.parentId);
-             if (parentNode) {
-               return {
-                 ...n,
-                 position: {
-                   x: absolutePosition.x - parentNode.position.x,
-                   y: absolutePosition.y - parentNode.position.y,
-                 }
-               }
-             }
-          } else if (targetDepartment && n.parentId === targetDepartment.id) {
-            // Dragged within same parent
-            return {
-              ...n,
-              position: {
-                x: absolutePosition.x - targetDepartment.position.x,
-                y: absolutePosition.y - targetDepartment.position.y,
-              }
-            };
+        // Calculate absolute coordinates of node n
+        let absX = n.position.x;
+        let absY = n.position.y;
+        if (n.parentId) {
+          if (n.parentId === node.id) {
+            return n;
           }
+          const parentNode = nodes.find(p => p.id === n.parentId);
+          if (parentNode) {
+            absX += parentNode.position.x;
+            absY += parentNode.position.y;
+          }
+        }
+
+        const { width: nWidth, height: nHeight } = getNodeDimensions(n);
+        const centerX = absX + nWidth / 2;
+        const centerY = absY + nHeight / 2;
+
+        const isInside = (
+          centerX >= deptLeft &&
+          centerX <= deptRight &&
+          centerY >= deptTop &&
+          centerY <= deptBottom
+        );
+
+        if (isInside) {
+          changed = true;
+          return {
+            ...n,
+            parentId: node.id,
+            position: {
+              x: absX - deptLeft,
+              y: Math.max(170, absY - deptTop),
+            }
+          };
         }
         return n;
       });
 
-      let nextEdges = [...edges];
+      if (changed) {
+        setNodes(nextNodes);
+      }
+    },
+    [nodes, setNodes]
+  );
 
+  const onNodeDragStop = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      let nextNodes = [...nodes];
+
+      if (node.type === 'department') {
+        // A department node was dragged.
+        // We want to see if any free-floating (or child of other departments) processes/storages
+        // are now visually inside this department's boundaries, and if so, attach them!
+        const { width: deptWidth, height: deptHeight } = getNodeDimensions(node);
+        const deptLeft = node.position.x;
+        const deptTop = node.position.y;
+        const deptRight = deptLeft + deptWidth;
+        const deptBottom = deptTop + deptHeight;
+
+        nextNodes = nodes.map((n) => {
+          if (n.type === 'department') return n;
+
+          // Calculate absolute coordinates of node n
+          let absX = n.position.x;
+          let absY = n.position.y;
+          if (n.parentId) {
+            // If it is already a child of this department, its relative position is fine,
+            // and it was dragged along with it.
+            if (n.parentId === node.id) {
+              return n;
+            }
+            const parentNode = nodes.find(p => p.id === n.parentId);
+            if (parentNode) {
+              absX += parentNode.position.x;
+              absY += parentNode.position.y;
+            }
+          }
+
+          const { width: nWidth, height: nHeight } = getNodeDimensions(n);
+          const centerX = absX + nWidth / 2;
+          const centerY = absY + nHeight / 2;
+
+          const isInside = (
+            centerX >= deptLeft &&
+            centerX <= deptRight &&
+            centerY >= deptTop &&
+            centerY <= deptBottom
+          );
+
+          if (isInside) {
+            // Attach to this department!
+            return {
+              ...n,
+              parentId: node.id,
+              position: {
+                x: absX - deptLeft,
+                y: Math.max(170, absY - deptTop),
+              }
+            };
+          }
+          return n;
+        });
+      } else {
+        // A process or storage node was dragged.
+        // Calculate correct absolute position on the canvas
+        let absolutePosition = { ...node.position };
+        if (node.parentId) {
+          const oldParent = nodes.find((n) => n.id === node.parentId);
+          if (oldParent) {
+            absolutePosition.x += oldParent.position.x;
+            absolutePosition.y += oldParent.position.y;
+          }
+        }
+
+        const { width: nWidth, height: nHeight } = getNodeDimensions(node);
+        const centerX = absolutePosition.x + nWidth / 2;
+        const centerY = absolutePosition.y + nHeight / 2;
+
+        // Find parent department geometrically using the center point
+        const targetDepartment = nodes.find((dept) => {
+          if (dept.type !== 'department' || dept.id === node.id) return false;
+          const { width: dWidth, height: dHeight } = getNodeDimensions(dept);
+          
+          return (
+            centerX >= dept.position.x &&
+            centerX <= dept.position.x + dWidth &&
+            centerY >= dept.position.y &&
+            centerY <= dept.position.y + dHeight
+          );
+        });
+
+        nextNodes = nodes.map((n) => {
+          if (n.id === node.id) {
+            if (targetDepartment) {
+              return {
+                ...n,
+                parentId: targetDepartment.id,
+                position: {
+                  x: absolutePosition.x - targetDepartment.position.x,
+                  y: Math.max(170, absolutePosition.y - targetDepartment.position.y),
+                }
+              };
+            } else {
+              // Dragged completely outside of any department -> make it a top-level standalone node!
+              const { parentId, ...rest } = n;
+              return {
+                ...rest,
+                position: absolutePosition
+              };
+            }
+          }
+          return n;
+        });
+      }
+
+      let nextEdges = [...edges];
       nextNodes = expandParentIfNeeded(nextNodes);
 
       setNodes(nextNodes);
       setEdges(nextEdges);
     },
-    [getIntersectingNodes, nodes, edges, setNodes, setEdges]
+    [nodes, edges, setNodes, setEdges]
   );
 
-  const visibleNodes = useMemo(() => {
+  const { visibleNodes, visibleEdges } = useMemo(() => {
     const collapsedDeps = new Set(nodes.filter(n => n.type === 'department' && n.data.isCollapsed).map(n => n.id));
-    return nodes.map(n => {
+    
+    // Helper to calculate absolute node coordinates
+    const getNodeAbsolutePosition = (node: Node): { x: number; y: number } => {
+      let x = node.position.x;
+      let y = node.position.y;
+      let curr = node;
+      while (curr.parentId) {
+        const parent = nodes.find(n => n.id === curr.parentId);
+        if (!parent) break;
+        x += parent.position.x;
+        y += parent.position.y;
+        curr = parent;
+      }
+      return { x, y };
+    };
+
+    const getDeptDimensions = (dept: Node) => {
+      const width = parseFloat(dept.style?.width as string) || dept.measured?.width || dept.width || 300;
+      const height = parseFloat(dept.style?.height as string) || dept.measured?.height || dept.height || 200;
+      return { width, height };
+    };
+
+    const getNodeCenter = (node: Node) => {
+      const absPos = getNodeAbsolutePosition(node);
+      const { width, height } = getNodeDimensions(node);
+      return {
+        x: absPos.x + width / 2,
+        y: absPos.y + height / 2,
+      };
+    };
+
+    const lineSegmentsIntersect = (
+      x1: number, y1: number, x2: number, y2: number,
+      x3: number, y3: number, x4: number, y4: number
+    ): boolean => {
+      const det = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
+      if (Math.abs(det) < 0.001) return false;
+      const lambda = ((y4 - y3) * (x4 - x1) + (x3 - x4) * (y4 - y1)) / det;
+      const gamma = ((y1 - y2) * (x4 - x1) + (x2 - x1) * (y4 - y1)) / det;
+      return lambda >= 0 && lambda <= 1 && gamma >= 0 && gamma <= 1;
+    };
+
+    const lineIntersectsBox = (
+      x1: number, y1: number, x2: number, y2: number,
+      left: number, top: number, right: number, bottom: number
+    ): boolean => {
+      const p1Inside = x1 >= left && x1 <= right && y1 >= top && y1 <= bottom;
+      const p2Inside = x2 >= left && x2 <= right && y2 >= top && y2 <= bottom;
+      if (p1Inside || p2Inside) return true;
+      if (lineSegmentsIntersect(x1, y1, x2, y2, left, top, right, top)) return true;
+      if (lineSegmentsIntersect(x1, y1, x2, y2, left, bottom, right, bottom)) return true;
+      if (lineSegmentsIntersect(x1, y1, x2, y2, left, top, left, bottom)) return true;
+      if (lineSegmentsIntersect(x1, y1, x2, y2, right, top, right, bottom)) return true;
+      return false;
+    };
+
+    const pathIntersectsBox = (
+      x1: number, y1: number, x2: number, y2: number,
+      left: number, top: number, right: number, bottom: number
+    ): boolean => {
+      // 1. Check straight line first
+      if (lineIntersectsBox(x1, y1, x2, y2, left, top, right, bottom)) return true;
+
+      // 2. Check orthogonal horizontal-first path segments
+      const xMid = x1 + (x2 - x1) / 2;
+      const yMid = y1 + (y2 - y1) / 2;
+
+      // Horizontal-first: (x1,y1)->(xMid,y1)->(xMid,y2)->(x2,y2)
+      if (lineIntersectsBox(x1, y1, xMid, y1, left, top, right, bottom)) return true;
+      if (lineIntersectsBox(xMid, y1, xMid, y2, left, top, right, bottom)) return true;
+      if (lineIntersectsBox(xMid, y2, x2, y2, left, top, right, bottom)) return true;
+
+      // Vertical-first: (x1,y1)->(x1,yMid)->(x2,yMid)->(x2,y2)
+      if (lineIntersectsBox(x1, y1, x1, yMid, left, top, right, bottom)) return true;
+      if (lineIntersectsBox(x1, yMid, x2, yMid, left, top, right, bottom)) return true;
+      if (lineIntersectsBox(x2, yMid, x2, y2, left, top, right, bottom)) return true;
+
+      return false;
+    };
+
+    // Calculate z-indices for departments dynamically to handle overlap/crossings
+    const deptZIndices: Record<string, number> = {};
+    const departments = nodes.filter(n => n.type === 'department');
+    departments.forEach(d => {
+      deptZIndices[d.id] = 10;
+    });
+
+    for (let iter = 0; iter < Math.min(5, departments.length + 1); iter++) {
+      let changed = false;
+      edges.forEach(e => {
+        const sNode = nodes.find(n => n.id === e.source);
+        const tNode = nodes.find(n => n.id === e.target);
+        if (!sNode || !tNode) return;
+
+        const sParentId = sNode.parentId;
+        const tParentId = tNode.parentId;
+        const sParentZ = sParentId ? (deptZIndices[sParentId] ?? 10) : 10;
+        const tParentZ = tParentId ? (deptZIndices[tParentId] ?? 10) : 10;
+        const maxEndpointZ = Math.max(sParentZ, tParentZ);
+
+        const sCenter = getNodeCenter(sNode);
+        const tCenter = getNodeCenter(tNode);
+
+        departments.forEach(dept => {
+          if (dept.id === sParentId || dept.id === tParentId) return;
+
+          const deptAbsPos = getNodeAbsolutePosition(dept);
+          const { width: deptW, height: deptH } = getDeptDimensions(dept);
+          const left = deptAbsPos.x;
+          const top = deptAbsPos.y;
+          const right = left + deptW;
+          const bottom = top + deptH;
+
+          if (pathIntersectsBox(sCenter.x, sCenter.y, tCenter.x, tCenter.y, left, top, right, bottom)) {
+            const requiredZ = maxEndpointZ + 2;
+            if (deptZIndices[dept.id] < requiredZ) {
+              deptZIndices[dept.id] = requiredZ;
+              changed = true;
+            }
+          }
+        });
+      });
+      if (!changed) break;
+    }
+
+    // Process nodes with calculated z-indices
+    const preparedNodes = nodes.map(n => {
       const isHidden = Boolean((n.parentId && collapsedDeps.has(n.parentId)) || 
                        (n.data.subprocess && hiddenSubprocesses.includes(n.data.subprocess as string)));
       
@@ -463,23 +769,22 @@ export const FlowCanvas = () => {
       if (n.type === 'department') {
         nodeObj.dragHandle = '.custom-drag-handle';
         nodeObj.className = 'department-wrapper-node';
+        nodeObj.zIndex = deptZIndices[n.id] ?? 10;
       } else {
         delete nodeObj.dragHandle;
         delete nodeObj.className;
+        nodeObj.zIndex = n.parentId ? (deptZIndices[n.parentId] ?? 10) + 2 : 12;
       }
       
-      // Clean up any other potentially undefined internal properties
-      if (nodeObj.parentId === undefined) delete nodeObj.parentId;
+      if (nodeObj.parentId === undefined || nodeObj.parentId === null || nodeObj.parentId === '') {
+        delete nodeObj.parentId;
+      }
       if (nodeObj.extent === undefined) delete nodeObj.extent;
       if (nodeObj.expandParent === undefined) delete nodeObj.expandParent;
       
       return nodeObj;
     });
-  }, [nodes, hiddenSubprocesses]);
 
-  const visibleEdges = useMemo(() => {
-    const collapsedDeps = new Set(nodes.filter(n => n.type === 'department' && n.data.isCollapsed).map(n => n.id));
-    
     const getEffectiveId = (nodeId: string) => {
       const node = nodes.find(n => n.id === nodeId);
       if (node && node.parentId && collapsedDeps.has(node.parentId)) {
@@ -488,7 +793,7 @@ export const FlowCanvas = () => {
       return nodeId;
     };
 
-    return edges.map(e => {
+    const preparedEdges = edges.map(e => {
       const effSource = getEffectiveId(e.source);
       const effTarget = getEffectiveId(e.target);
       
@@ -496,16 +801,40 @@ export const FlowCanvas = () => {
         return { ...e, hidden: true };
       }
       
+      const sNode = nodes.find(n => n.id === e.source);
+      const tNode = nodes.find(n => n.id === e.target);
+      
+      const isSourceSubprocessHidden = sNode?.data?.subprocess && hiddenSubprocesses.includes(sNode.data.subprocess as string);
+      const isTargetSubprocessHidden = tNode?.data?.subprocess && hiddenSubprocesses.includes(tNode.data.subprocess as string);
+      
+      if (isSourceSubprocessHidden || isTargetSubprocessHidden) {
+        return { ...e, hidden: true };
+      }
+      
+      const sParentId = sNode?.parentId;
+      const tParentId = tNode?.parentId;
+      const sParentZ = sParentId ? (deptZIndices[sParentId] ?? 10) : 10;
+      const tParentZ = tParentId ? (deptZIndices[tParentId] ?? 10) : 10;
+      const zIndex = Math.min(sParentZ, tParentZ) - 1;
+      
       return { 
         ...e, 
         source: effSource, 
         target: effTarget, 
         hidden: false,
         sourceHandle: effSource !== e.source ? 'dep-source' : e.sourceHandle,
-        targetHandle: effTarget !== e.target ? 'dep-target' : e.targetHandle
+        targetHandle: effTarget !== e.target ? 'dep-target' : e.targetHandle,
+        zIndex
       };
     });
-  }, [edges, nodes]);
+
+    return { visibleNodes: preparedNodes, visibleEdges: preparedEdges };
+  }, [nodes, edges, hiddenSubprocesses]);
+
+  useEffect(() => {
+    (window as any).debugNodes = nodes;
+    (window as any).debugEdges = edges;
+  }, [nodes, edges]);
 
   return (
     <div className="app-container">
@@ -520,12 +849,15 @@ export const FlowCanvas = () => {
           onInit={setReactFlowInstance}
           onDrop={onDrop}
           onDragOver={onDragOver}
+          onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{ type: 'movement' }}
           fitView
           minZoom={0.1}
+          onlyRenderVisibleElements
+          zIndexMode="manual"
         >
           <Background color="rgba(255, 255, 255, 0.1)" gap={20} size={1} />
           <Controls />
@@ -549,12 +881,28 @@ export const FlowCanvas = () => {
                 Deli z drugimi
               </button>
               <button 
+                onClick={() => setSubprocessViewOpen(true)}
+                className="glass-panel" 
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-main)', cursor: 'pointer', borderRadius: '8px' }}
+              >
+                <Network size={16} style={{ color: 'var(--accent-primary)' }} />
+                Zaporedni pogled
+              </button>
+              <button 
                 onClick={() => exportToExcel(nodes, edges)}
                 className="glass-panel" 
                 style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-main)', cursor: 'pointer', borderRadius: '8px' }}
               >
                 <Download size={16} />
-                Izvozi
+                Excel
+              </button>
+              <button 
+                onClick={() => exportToWord(nodes, edges, savedSubprocesses)}
+                className="glass-panel" 
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-main)', cursor: 'pointer', borderRadius: '8px' }}
+              >
+                <FileText size={16} />
+                Word (.doc)
               </button>
               <label 
                 className="glass-panel" 
@@ -601,8 +949,21 @@ export const FlowCanvas = () => {
         </ReactFlow>
       </div>
       {shareModalOpen && flowId && <ShareModal flowId={flowId} onClose={() => setShareModalOpen(false)} />}
-      {issuesNodeId && <IssuesModal nodeId={issuesNodeId} onClose={() => setIssuesNodeId(null)} />}
+      {(issuesNodeId || issuesEdgeId) && (
+        <IssuesModal 
+          nodeId={issuesNodeId} 
+          edgeId={issuesEdgeId} 
+          onClose={() => { setIssuesNodeId(null); setIssuesEdgeId(null); }} 
+        />
+      )}
       {issuesOverviewOpen && <IssuesOverviewModal onClose={() => setIssuesOverviewOpen(false)} />}
+      {subprocessViewOpen && (
+        <SubprocessFlowView 
+          onClose={() => setSubprocessViewOpen(false)} 
+          nodes={nodes} 
+          edges={edges} 
+        />
+      )}
     </div>
   );
 };

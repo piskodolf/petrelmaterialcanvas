@@ -101,7 +101,7 @@ export const importFromExcel = (file: File, currentNodes: Node[], currentEdges: 
                 ...(existingNode ? existingNode.data : {}),
                 label: row['Ime oddelka'] || 'Nov Oddelek'
               },
-              zIndex: -1
+              zIndex: 0
             });
           });
         }

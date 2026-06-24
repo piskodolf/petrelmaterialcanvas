@@ -1,14 +1,18 @@
 import { memo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Handle, Position, useReactFlow, NodeResizer, type NodeProps } from '@xyflow/react';
-import { HardDrive, Trash2, Package, Plus, Edit2, FileText, AlertTriangle } from 'lucide-react';
+import { HardDrive, Trash2, Package, Plus, Edit2, FileText, AlertTriangle, Layers, HelpCircle } from 'lucide-react';
 import { useMaterials } from '../contexts/MaterialContext';
 import './nodes.css';
 import type { MaterialColumn } from './ProcessNode';
+import { ArrowIcon } from './ProcessNode';
 
 export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
   const { setNodes, setEdges } = useReactFlow();
-  const { library, addMaterialToLibrary, removeMaterialFromLibrary, activeFilter } = useMaterials();
+  const { library, addMaterialToLibrary, removeMaterialFromLibrary, activeFilter, openMaterialEditor } = useMaterials();
   const [pickerOpen, setPickerOpen] = useState<{ colIndex: number } | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [variantSubMenu, setVariantSubMenu] = useState<{ itemUrl: string } | null>(null);
   
   type LightboxState = { src: string | null, colIndex: number, slotIndex: number | null };
   const [lightboxData, setLightboxData] = useState<LightboxState | null>(null);
@@ -24,7 +28,12 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
   }
 
   const hasMaterial = (url: string) => {
-    return columns.some(c => c.materialUrl === url || c.items?.includes(url));
+    const hasInCols = columns.some(c => c && (c.materialUrl === url || c.items?.includes(url)));
+    if (hasInCols) return true;
+
+    // Legacy fallback
+    const legacyMats = Array.isArray(data.materials) ? data.materials : [];
+    return legacyMats.includes(url);
   };
 
   const isFilteredOut = activeFilter && !hasMaterial(activeFilter);
@@ -130,20 +139,26 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
     }));
   };
 
-  const selectFromLibrary = (dataUrl: string) => {
+  const selectFromLibrary = (dataUrl: string, variantId?: string, variantLabel?: string) => {
     if (!pickerOpen) return;
     const { colIndex } = pickerOpen;
     setNodes((nds) => nds.map((n) => {
       if (n.id === id) {
         const cols = Array.isArray(n.data.columns) ? [...n.data.columns] : columns;
         if (cols[colIndex]) {
-          cols[colIndex] = { ...cols[colIndex], materialUrl: dataUrl };
+          cols[colIndex] = { 
+            ...cols[colIndex], 
+            materialUrl: dataUrl,
+            variantId: variantId ?? null,
+            variantLabel: variantLabel ?? null
+          };
         }
         return { ...n, data: { ...n.data, columns: cols } };
       }
       return n;
     }));
     setPickerOpen(null);
+    setVariantSubMenu(null);
   };
 
   const removeFromLibraryLocal = (e: React.MouseEvent, dataUrl: string) => {
@@ -212,32 +227,72 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
             + Naloži z računalnika
           </button>
           
-          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>ALI:</span>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', width: '100%' }}>
-              <input 
-                id={`text-material-input-storage-${id}-${pickerOpen.colIndex}`}
-                type="text" 
-                placeholder="Ime (brez slike)" 
-                style={{ flexGrow: 1, padding: '4px 8px', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid var(--border-subtle)', background: 'var(--bg-dark)', color: 'var(--text-main)', minWidth: '0' }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                    const textUrl = `text:${e.currentTarget.value.trim()}`;
-                    addMaterialToLibrary(textUrl);
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px', border: '1px dashed var(--border-subtle)', borderRadius: '6px', background: 'rgba(255,255,255,0.02)', width: '100%' }}>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: 'var(--text-muted)', textAlign: 'left' }}>USTVARI NOV POLIZDELEK (BREZ SLIKE):</div>
+            
+            <input 
+              id={`text-material-input-storage-${id}-${pickerOpen.colIndex}`}
+              type="text" 
+              placeholder="Ime polizdelka" 
+              style={{ padding: '6px 8px', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid var(--border-subtle)', background: 'var(--bg-dark)', color: 'var(--text-main)', width: '100%' }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const inputName = document.getElementById(`text-material-input-storage-${id}-${pickerOpen.colIndex}`) as HTMLInputElement;
+                  const inputCat = document.getElementById(`text-material-category-storage-${id}-${pickerOpen.colIndex}`) as HTMLInputElement;
+                  if (inputName && inputName.value.trim()) {
+                    const nameVal = inputName.value.trim();
+                    const catVal = inputCat?.value.trim() || 'Neuvrščeno';
+                    const textUrl = `text:${nameVal}`;
+                    addMaterialToLibrary(textUrl, catVal, nameVal);
                     selectFromLibrary(textUrl);
+                    updateData('description', nameVal);
+                  }
+                }
+              }}
+            />
+            
+            <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+              <input 
+                id={`text-material-category-storage-${id}-${pickerOpen.colIndex}`}
+                type="text" 
+                placeholder="Kategorija (npr. Embalaža)" 
+                list={`categories-list-storage-${id}-${pickerOpen.colIndex}`}
+                style={{ flexGrow: 1, padding: '6px 8px', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid var(--border-subtle)', background: 'var(--bg-dark)', color: 'var(--text-main)', minWidth: '0' }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const inputName = document.getElementById(`text-material-input-storage-${id}-${pickerOpen.colIndex}`) as HTMLInputElement;
+                    const inputCat = document.getElementById(`text-material-category-storage-${id}-${pickerOpen.colIndex}`) as HTMLInputElement;
+                    if (inputName && inputName.value.trim()) {
+                      const nameVal = inputName.value.trim();
+                      const catVal = inputCat?.value.trim() || 'Neuvrščeno';
+                      const textUrl = `text:${nameVal}`;
+                      addMaterialToLibrary(textUrl, catVal, nameVal);
+                      selectFromLibrary(textUrl);
+                      updateData('description', nameVal);
+                    }
                   }
                 }}
               />
+              <datalist id={`categories-list-storage-${id}-${pickerOpen.colIndex}`}>
+                {Array.from(new Set(library.map(item => item.group || 'Neuvrščeno'))).map(cat => (
+                  <option key={cat} value={cat} />
+                ))}
+              </datalist>
+              
               <button 
                 onClick={() => {
-                  const input = document.getElementById(`text-material-input-storage-${id}-${pickerOpen.colIndex}`) as HTMLInputElement;
-                  if (input && input.value.trim()) {
-                    const textUrl = `text:${input.value.trim()}`;
-                    addMaterialToLibrary(textUrl);
+                  const inputName = document.getElementById(`text-material-input-storage-${id}-${pickerOpen.colIndex}`) as HTMLInputElement;
+                  const inputCat = document.getElementById(`text-material-category-storage-${id}-${pickerOpen.colIndex}`) as HTMLInputElement;
+                  if (inputName && inputName.value.trim()) {
+                    const nameVal = inputName.value.trim();
+                    const catVal = inputCat?.value.trim() || 'Neuvrščeno';
+                    const textUrl = `text:${nameVal}`;
+                    addMaterialToLibrary(textUrl, catVal, nameVal);
                     selectFromLibrary(textUrl);
+                    updateData('description', nameVal);
                   }
                 }}
-                style={{ padding: '4px 8px', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                style={{ padding: '6px 12px', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', whiteSpace: 'nowrap' }}
               >
                 Dodaj
               </button>
@@ -245,20 +300,127 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
           </div>
         </div>
         {library.length > 0 && (
-          <div className="picker-history">
-            <div className="picker-grid">
-              {library.map((item, i) => (
-                <div key={i} className="picker-item" onClick={() => selectFromLibrary(item.url)}>
-                  {item.url.startsWith('text:') ? (
-                    <div style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', width: '100%', wordBreak: 'break-word', lineHeight: 1.1 }}>
-                      {item.url.substring(5)}
+          <div className="picker-history" style={{ maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
+            <div className="picker-subtitle" style={{ marginBottom: '8px', textAlign: 'left' }}>Skupine materialov:</div>
+            {Object.entries(
+              library.reduce((acc, item) => {
+                const grp = item.group || 'Neuvrščeno';
+                if (!acc[grp]) acc[grp] = [];
+                acc[grp].push(item);
+                return acc;
+              }, {} as Record<string, typeof library>)
+            ).map(([groupName, items]) => {
+              const isExpanded = !!expandedGroups[groupName];
+              return (
+                <div key={groupName} style={{ marginBottom: '10px' }}>
+                  <div 
+                    onClick={() => setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }))}
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      fontSize: '9px', 
+                      fontWeight: 'bold', 
+                      color: 'var(--accent-success)', 
+                      marginBottom: '4px', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: '0.05em', 
+                      textAlign: 'left', 
+                      borderBottom: '1px solid rgba(255,255,255,0.05)', 
+                      paddingBottom: '4px',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <span>{groupName} ({items.length})</span>
+                    <span style={{ fontSize: '8px', opacity: 0.6 }}>{isExpanded ? '▼' : '▶'}</span>
+                  </div>
+                  {isExpanded && (
+                    <div className="picker-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                      {items.map((item, i) => {
+                        const hasVariants = item.variants && item.variants.length > 0;
+                        const isSubMenuOpen = variantSubMenu?.itemUrl === item.url;
+                        return (
+                          <div key={i} style={{ position: 'relative' }}>
+                            <div
+                              className="picker-item"
+                              style={{ width: '38px', height: '38px', position: 'relative', outline: isSubMenuOpen ? '2px solid var(--accent-primary)' : undefined }}
+                              onClick={() => {
+                                if (hasVariants) {
+                                  setVariantSubMenu(isSubMenuOpen ? null : { itemUrl: item.url });
+                                } else {
+                                  selectFromLibrary(item.url);
+                                }
+                              }}
+                              title={hasVariants ? 'Klikni za izbiro pod-statusa' : item.description || item.url}
+                            >
+                              {item.url.startsWith('text:') ? (
+                                <div style={{ fontSize: '6px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', width: '100%', wordBreak: 'break-word', lineHeight: 1.1, padding: '1px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                                  {item.url.substring(5)}
+                                </div>
+                              ) : (
+                                <img src={item.url} alt="History" className="picker-image" />
+                              )}
+                              {hasVariants && (
+                                <div style={{ position: 'absolute', bottom: 1, right: 1, background: 'var(--accent-primary)', borderRadius: '50%', width: '8px', height: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Layers size={5} color="white" />
+                                </div>
+                              )}
+                              <button 
+                                className="picker-item-delete" 
+                                onClick={(e) => { e.stopPropagation(); removeMaterialFromLibrary(item.url); }}
+                                title="Izbriši iz knjižnice"
+                              >
+                                &times;
+                              </button>
+                            </div>
+                            {/* Variant sub-menu */}
+                            {isSubMenuOpen && hasVariants && (
+                              <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                zIndex: 100,
+                                background: 'var(--bg-panel)',
+                                border: '1px solid var(--accent-primary)',
+                                borderRadius: '6px',
+                                padding: '6px',
+                                minWidth: '140px',
+                                boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px',
+                                marginTop: '4px'
+                              }}>
+                                <div style={{ fontSize: '9px', fontWeight: 'bold', color: 'var(--accent-primary)', textTransform: 'uppercase', marginBottom: '2px', letterSpacing: '0.05em' }}>
+                                  Izberi pod-status:
+                                </div>
+                                <button
+                                  onClick={() => selectFromLibrary(item.url)}
+                                  style={{ textAlign: 'left', padding: '4px 8px', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', fontStyle: 'italic' }}
+                                >
+                                  Brez pod-statusa
+                                </button>
+                                {item.variants!.map(v => (
+                                  <button
+                                    key={v.id}
+                                    onClick={() => selectFromLibrary(item.url, v.id, v.label)}
+                                    style={{ textAlign: 'left', padding: '4px 8px', background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.3)', borderRadius: '4px', color: 'var(--text-main)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                                  >
+                                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent-primary)', flexShrink: 0, display: 'inline-block' }} />
+                                    {v.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ) : (
-                    <img src={item.url} alt="History" className="picker-image" />
                   )}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -267,27 +429,132 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
 
   const renderLightbox = () => {
     if (!lightboxData) return null;
-    return (
+    const { src, colIndex } = lightboxData;
+
+    // Find the current column to get variantId
+    const currentCols = Array.isArray(data.columns) ? data.columns : columns;
+    const currentCol = currentCols[colIndex] as MaterialColumn | undefined;
+    const currentVariantId = currentCol?.variantId ?? null;
+
+    // Look up material from library
+    const libItem = src ? library.find(m => m.url === src) : null;
+    const hasVariants = libItem?.variants && libItem.variants.length > 0;
+
+    const changeVariant = (variantId: string | null, variantLabel: string | null) => {
+      setNodes((nds) => nds.map((n) => {
+        if (n.id === id) {
+          const cols = Array.isArray(n.data.columns) ? [...n.data.columns] : [...currentCols];
+          if (cols[colIndex]) {
+            cols[colIndex] = { ...cols[colIndex], variantId, variantLabel };
+          }
+          return { ...n, data: { ...n.data, columns: cols } };
+        }
+        return n;
+      }));
+      setLightboxData(null);
+    };
+
+    return createPortal(
       <div className="lightbox-overlay nodrag nopan" onClick={() => setLightboxData(null)}>
-        <div className="lightbox-content" onClick={e => e.stopPropagation()}>
-          {lightboxData.src ? (
-            lightboxData.src.startsWith('text:') ? (
-              <div style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', padding: '20px', background: 'var(--bg-dark)', borderRadius: '8px', color: 'var(--text-main)' }}>
-                {lightboxData.src.substring(5)}
+        <div className="lightbox-content" onClick={e => e.stopPropagation()} style={{ padding: '0', minWidth: '220px', maxWidth: '280px', overflow: 'hidden', borderRadius: '10px' }}>
+          
+          {/* Header with image */}
+          <div style={{ background: 'var(--bg-dark)', padding: '16px', display: 'flex', gap: '12px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ width: '52px', height: '52px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {src ? (
+                src.startsWith('text:') ? (
+                  <div style={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', padding: '4px', wordBreak: 'break-word', lineHeight: 1.1, color: 'var(--text-main)' }}>
+                    {src.substring(5)}
+                  </div>
+                ) : (
+                  <img src={src} alt="Material" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                )
+              ) : (
+                <Package size={28} style={{ opacity: 0.3 }} />
+              )}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {libItem?.description || (src?.startsWith('text:') ? src.substring(5) : 'Material')}
               </div>
-            ) : (
-              <img src={lightboxData.src} alt="Preview" className="lightbox-preview" />
-            )
-          ) : (
-            <div style={{ width: '100px', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-              <Package size={48} className="material-icon" />
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {libItem?.group || 'Neuvrščeno'}
+              </div>
+              {currentCol?.variantLabel && (
+                <div style={{ marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(56,189,248,0.15)', border: '1px solid rgba(56,189,248,0.4)', borderRadius: '10px', padding: '2px 8px' }}>
+                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent-primary)', display: 'inline-block', flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.68rem', color: 'var(--accent-primary)', fontWeight: 600 }}>{currentCol.variantLabel}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Variant switcher */}
+          {hasVariants && (
+            <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Layers size={11} /> Pod-status:
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <button
+                  onClick={() => changeVariant(null, null)}
+                  style={{
+                    textAlign: 'left', padding: '5px 10px',
+                    background: !currentVariantId ? 'rgba(56,189,248,0.15)' : 'transparent',
+                    border: `1px solid ${!currentVariantId ? 'rgba(56,189,248,0.5)' : 'var(--border-subtle)'}`,
+                    borderRadius: '6px', color: !currentVariantId ? 'var(--accent-primary)' : 'var(--text-muted)',
+                    fontSize: '0.75rem', cursor: 'pointer', fontStyle: 'italic'
+                  }}
+                >
+                  Brez pod-statusa
+                </button>
+                {libItem!.variants!.map(v => (
+                  <button
+                    key={v.id}
+                    onClick={() => changeVariant(v.id, v.label)}
+                    style={{
+                      textAlign: 'left', padding: '5px 10px',
+                      background: currentVariantId === v.id ? 'rgba(56,189,248,0.15)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${currentVariantId === v.id ? 'rgba(56,189,248,0.5)' : 'var(--border-subtle)'}`,
+                      borderRadius: '6px', color: currentVariantId === v.id ? 'var(--accent-primary)' : 'var(--text-main)',
+                      fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: currentVariantId === v.id ? 600 : 400
+                    }}
+                  >
+                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: currentVariantId === v.id ? 'var(--accent-primary)' : 'var(--text-muted)', flexShrink: 0, display: 'inline-block' }} />
+                    {v.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
-          <button className="lightbox-delete-btn" onClick={removeFromNode}>
-            <Trash2 size={16} /> Počisti material
-          </button>
+
+          {/* Actions */}
+          <div style={{ padding: '10px 14px', display: 'flex', gap: '6px' }}>
+            <button
+              onClick={() => { setLightboxData(null); openMaterialEditor(src!); }}
+              style={{ flex: 1, padding: '7px', background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.3)', borderRadius: '6px', color: 'var(--accent-primary)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+              title="Uredi material (ime, skupino, variante)"
+            >
+              <Edit2 size={12} /> Uredi
+            </button>
+            <button
+              onClick={() => { setLightboxData(null); setPickerOpen({ colIndex }); }}
+              style={{ flex: 1, padding: '7px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-subtle)', borderRadius: '6px', color: 'var(--text-main)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+              title="Zamenjaj material"
+            >
+              <Plus size={12} /> Zamenjaj
+            </button>
+            <button
+              onClick={removeFromNode}
+              style={{ padding: '7px 12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', color: '#ef4444', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+              title="Odstrani material"
+            >
+              <Trash2 size={12} /> Odstrani
+            </button>
+          </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   };
 
@@ -298,7 +565,7 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
           <div key={colIndex} className="process-column">
             {/* Header Material */}
             <div 
-              className="material-icon-wrapper header-material clickable" 
+              className="material-icon-wrapper header-material clickable nodrag" 
               style={{ position: 'relative' }}
               onClick={() => {
                 if (!col.materialUrl) setPickerOpen({ colIndex });
@@ -315,10 +582,33 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
                   <img src={col.materialUrl} alt="Tip" className="material-image" />
                 )
               ) : <Plus size={14} className="material-icon" />}
+              {/* Variant badge */}
+              {col.variantLabel && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: '-14px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: 'rgba(56,189,248,0.85)',
+                  color: '#000',
+                  fontSize: '5px',
+                  fontWeight: 'bold',
+                  padding: '1px 4px',
+                  borderRadius: '4px',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '60px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  pointerEvents: 'none',
+                  zIndex: 2
+                }} title={col.variantLabel}>
+                  {col.variantLabel}
+                </div>
+              )}
               <Handle type="target" position={Position.Left} id={`input-col-${colIndex}-mat-0`} className="material-handle material-handle-target" />
               <Handle type="source" position={Position.Right} id={`output-col-${colIndex}-mat-0`} className="material-handle material-handle-source" />
               <button 
-                className="column-delete-btn" 
+                className="column-delete-btn nodrag" 
                 onClick={(e) => { e.stopPropagation(); updateColumnCapacity(colIndex, -col.capacity); }}
                 title="Izbriši stolpec"
               >&times;</button>
@@ -326,11 +616,11 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
 
             {/* Capacity Controls & Slots */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <button className="control-btn material-plus" style={{ margin: 0, padding: 0, width: '14px', height: '14px', fontSize: '12px' }} onClick={() => updateColumnCapacity(colIndex, -1)} title="Zmanjšaj kapaciteto">-</button>
+              <button className="control-btn material-plus nodrag" style={{ margin: 0, padding: 0, width: '14px', height: '14px', fontSize: '12px' }} onClick={() => updateColumnCapacity(colIndex, -1)} title="Zmanjšaj kapaciteto">-</button>
               
               <div className="process-column-slots" style={{ width: 'auto' }}>
                 {col.capacity > 10 ? (
-                  <div className="storage-square" title={`Kapaciteta: ${col.capacity}`}>
+                  <div className="storage-square nodrag" title={`Kapaciteta: ${col.capacity}`}>
                     <span style={{ color: 'white', fontSize: '10px', fontWeight: 'bold' }}>{col.capacity}</span>
                   </div>
                 ) : (
@@ -338,7 +628,7 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
                     const itemsList = col.items || [];
                     const itemUrl = itemsList[slotIndex] || null;
                     return (
-                      <div key={slotIndex} className="storage-square clickable" onClick={() => itemUrl && setLightboxData({ src: itemUrl, colIndex, slotIndex })}>
+                      <div key={slotIndex} className="storage-square clickable nodrag" onClick={() => itemUrl && setLightboxData({ src: itemUrl, colIndex, slotIndex })}>
                         {itemUrl && (
                           itemUrl.startsWith('text:') ? (
                             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1, padding: '1px' }}>
@@ -354,14 +644,14 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
                 )}
               </div>
               
-              <button className="control-btn material-plus" style={{ margin: 0, padding: 0, width: '14px', height: '14px', fontSize: '12px' }} onClick={() => updateColumnCapacity(colIndex, 1)} title="Povečaj kapaciteto">+</button>
+              <button className="control-btn material-plus nodrag" style={{ margin: 0, padding: 0, width: '14px', height: '14px', fontSize: '12px' }} onClick={() => updateColumnCapacity(colIndex, 1)} title="Povečaj kapaciteto">+</button>
             </div>
           </div>
         ))}
         
         {/* Add new column button */}
         <div style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '18px' }}>
-          <button className="control-btn material-plus" onClick={addColumn} title="Dodaj nov material">+</button>
+          <button className="control-btn material-plus nodrag" onClick={addColumn} title="Dodaj nov material">+</button>
         </div>
       </div>
     );
@@ -372,8 +662,8 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
       <NodeResizer 
         color="#22c55e" 
         isVisible={selected} 
-        minWidth={200} 
-        minHeight={150} 
+        minWidth={260} 
+        minHeight={250} 
       />
       <div 
         className={`storage-node-wrapper ${isFilteredOut ? 'filtered-out' : ''}`}
@@ -383,10 +673,19 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
       {renderPicker()}
       
       {/* Vertical alignment handles */}
-      <Handle type="target" position={Position.Top} id="input-top" style={{ left: '40%', zIndex: 10 }} className="handle handle-target" />
-      <Handle type="source" position={Position.Top} id="output-top" style={{ left: '60%', zIndex: 10 }} className="handle handle-source" />
+      <Handle type="target" position={Position.Top} id="input-top" style={{ left: '60%', zIndex: 10 }} className="handle handle-target">
+        <ArrowIcon direction="down" type="target" />
+      </Handle>
+      <Handle type="source" position={Position.Top} id="output-top" style={{ left: '40%', zIndex: 10 }} className="handle handle-source">
+        <ArrowIcon direction="up" type="source" />
+      </Handle>
       
-      <Handle type="target" position={Position.Left} id="input" className="handle handle-target" />
+      <Handle type="target" position={Position.Left} id="input" style={{ top: '60%', zIndex: 10 }} className="handle handle-target">
+        <ArrowIcon direction="right" type="target" />
+      </Handle>
+      <Handle type="source" position={Position.Left} id="output-left" style={{ top: '40%', zIndex: 10 }} className="handle handle-source">
+        <ArrowIcon direction="left" type="source" />
+      </Handle>
       
       <div className="storage-node-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexGrow: 1 }}>
@@ -401,6 +700,22 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
             <Edit2 size={12} className="edit-indicator" />
           </div>
         </div>
+        {Boolean(data.issues && (data.issues as any[]).filter(i => i.type !== 'vprasanje').length > 0) && (
+          <span 
+            style={{ background: 'var(--accent-warning)', color: '#000', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', marginRight: '4px' }}
+            title={`${(data.issues as any[]).filter(i => i.type !== 'vprasanje').length} izzivov/odpadkov`}
+          >
+            <AlertTriangle size={10} /> {((data.issues as any[]).filter(i => i.type !== 'vprasanje').length).toString()}
+          </span>
+        )}
+        {Boolean(data.issues && (data.issues as any[]).filter(i => i.type === 'vprasanje').length > 0) && (
+          <span 
+            style={{ background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', marginRight: '4px' }}
+            title={`${(data.issues as any[]).filter(i => i.type === 'vprasanje').length} odprtih vprašanj`}
+          >
+            <HelpCircle size={10} /> {((data.issues as any[]).filter(i => i.type === 'vprasanje').length).toString()}
+          </span>
+        )}
         <button className="delete-btn" onClick={onDelete} title="Izbriši skladišče"><Trash2 size={14} /></button>
       </div>
 
@@ -430,7 +745,7 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
             style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '6px', color: 'var(--accent-warning)', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
           >
             <AlertTriangle size={14} />
-            Izzivi in odpadki
+            Izzivi, odpadki & vprašanja
             {Boolean(data.issues && (data.issues as any[]).length > 0) && (
               <span style={{ background: 'var(--accent-warning)', color: '#000', padding: '2px 6px', borderRadius: '10px', fontSize: '9px', marginLeft: '4px' }}>
                 {((data.issues as any[]).length).toString()}
@@ -444,11 +759,20 @@ export const StorageNode = memo(({ id, data, selected }: NodeProps) => {
         {renderColumns(columns)}
       </div>
 
-      <Handle type="source" position={Position.Right} id="output" className="handle handle-source" />
+      <Handle type="target" position={Position.Right} id="input-right" style={{ top: '40%', zIndex: 10 }} className="handle handle-target">
+        <ArrowIcon direction="left" type="target" />
+      </Handle>
+      <Handle type="source" position={Position.Right} id="output" style={{ top: '60%', zIndex: 10 }} className="handle handle-source">
+        <ArrowIcon direction="right" type="source" />
+      </Handle>
       
       {/* Vertical alignment handles */}
-      <Handle type="target" position={Position.Bottom} id="input-bottom" style={{ left: '40%', zIndex: 10 }} className="handle handle-target" />
-      <Handle type="source" position={Position.Bottom} id="output-bottom" style={{ left: '60%', zIndex: 10 }} className="handle handle-source" />
+      <Handle type="target" position={Position.Bottom} id="input-bottom" style={{ left: '40%', zIndex: 10 }} className="handle handle-target">
+        <ArrowIcon direction="up" type="target" />
+      </Handle>
+      <Handle type="source" position={Position.Bottom} id="output-bottom" style={{ left: '60%', zIndex: 10 }} className="handle handle-source">
+        <ArrowIcon direction="down" type="source" />
+      </Handle>
     </div>
     </>
   );

@@ -5,7 +5,7 @@ import './IssuesModal.css';
 
 interface Issue {
   id: string;
-  type: 'izziv' | 'odpadek';
+  type: 'izziv' | 'odpadek' | 'vprasanje';
   text: string;
 }
 
@@ -30,7 +30,7 @@ export const IssuesOverviewModal: React.FC<IssuesOverviewModalProps> = ({ onClos
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Target size={20} style={{ color: 'var(--accent-primary)' }} />
             <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>
-              Skupni pregled izzivov in odpadkov
+              Skupni pregled izzivov, odpadkov in vprašanj
             </h2>
           </div>
           <button onClick={onClose} className="issues-modal-close">
@@ -40,7 +40,7 @@ export const IssuesOverviewModal: React.FC<IssuesOverviewModalProps> = ({ onClos
 
         <div className="issues-list" style={{ padding: '20px' }}>
           {nodesWithIssues.length === 0 ? (
-            <div className="issues-empty">Na platnu ni zabeleženih izzivov ali odpadkov.</div>
+            <div className="issues-empty">Na platnu ni zabeleženih izzivov, odpadkov ali vprašanj.</div>
           ) : (
             nodesWithIssues.map(node => {
               const issues = node.data.issues as Issue[];
@@ -57,7 +57,7 @@ export const IssuesOverviewModal: React.FC<IssuesOverviewModalProps> = ({ onClos
                     {issues.map(issue => (
                       <div key={issue.id} className={`issue-item issue-item-${issue.type}`} style={{ padding: '8px 12px' }}>
                         <div className="issue-type-badge">
-                          {issue.type === 'izziv' ? 'Izziv' : 'Odpadek'}
+                          {issue.type === 'izziv' ? 'Izziv' : issue.type === 'odpadek' ? 'Odpadek' : 'Vprašanje'}
                         </div>
                         <div className="issue-text">{issue.text}</div>
                       </div>

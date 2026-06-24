@@ -141,6 +141,10 @@
   border-left: 3px solid var(--accent-danger);
 }
 
+.issue-item-vprasanje {
+  border-left: 3px solid #3b82f6;
+}
+
 .issue-type-badge {
   font-size: 0.7rem;
   font-weight: bold;
@@ -158,6 +162,11 @@
 .issue-item-odpadek .issue-type-badge {
   background: rgba(239, 68, 68, 0.15);
   color: var(--accent-danger);
+}
+
+.issue-item-vprasanje .issue-type-badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
 }
 
 .issue-text {

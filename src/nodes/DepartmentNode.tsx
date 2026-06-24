@@ -15,9 +15,34 @@ export const DepartmentNode = memo(({ id, data, selected }: NodeProps) => {
     if (children.length === 0) return false;
     
     return children.some(child => {
-      const before = Array.isArray(child.data.materialsBefore) ? child.data.materialsBefore : [];
-      const after = Array.isArray(child.data.materialsAfter) ? child.data.materialsAfter : [];
-      return before.includes(activeFilter) || after.includes(activeFilter);
+      if (child.type === 'process') {
+        const inputCols = Array.isArray(child.data.inputColumns) ? child.data.inputColumns : [];
+        const outputCols = Array.isArray(child.data.outputColumns) ? child.data.outputColumns : [];
+        
+        const hasInCols = [...inputCols, ...outputCols].some(c => 
+          c && (c.materialUrl === activeFilter || c.items?.includes(activeFilter))
+        );
+        if (hasInCols) return true;
+
+        // Legacy fallback
+        const before = Array.isArray(child.data.materialsBefore) ? child.data.materialsBefore : [];
+        const after = Array.isArray(child.data.materialsAfter) ? child.data.materialsAfter : [];
+        return before.includes(activeFilter) || after.includes(activeFilter);
+      }
+      
+      if (child.type === 'storage') {
+        const columns = Array.isArray(child.data.columns) ? child.data.columns : [];
+        const hasInCols = columns.some(c => 
+          c && (c.materialUrl === activeFilter || c.items?.includes(activeFilter))
+        );
+        if (hasInCols) return true;
+
+        // Legacy fallback
+        const legacyMats = Array.isArray(child.data.materials) ? child.data.materials : [];
+        return legacyMats.includes(activeFilter);
+      }
+
+      return false;
     });
   };
 
@@ -49,7 +74,7 @@ export const DepartmentNode = memo(({ id, data, selected }: NodeProps) => {
           color="#38bdf8" 
           isVisible={selected} 
           minWidth={300} 
-          minHeight={150} 
+          minHeight={260} 
         />
       )}
       <div className="custom-drag-handle" title="Primi tukaj za premik oddelka" style={{ 
@@ -86,9 +111,9 @@ export const DepartmentNode = memo(({ id, data, selected }: NodeProps) => {
             title={isCollapsed ? "Razpri subproces" : "Zloži subproces"}
             style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
           >
-            {isCollapsed ? <ChevronDown size={22} /> : <ChevronUp size={22} />}
+            {isCollapsed ? <ChevronDown size={54} /> : <ChevronUp size={54} />}
           </button>
-          <Building2 size={26} className="department-icon" />
+          <Building2 size={64} className="department-icon" />
           <div style={{ position: 'relative', flexGrow: 1, display: 'flex', alignItems: 'center' }}>
             <input 
               className="node-input department-title-input nodrag"
@@ -96,10 +121,10 @@ export const DepartmentNode = memo(({ id, data, selected }: NodeProps) => {
               onBlur={(e) => updateData('label', e.target.value)}
               placeholder="Ime skupine / subprocesa"
             />
-            <Edit2 size={16} className="edit-indicator" />
+            <Edit2 size={36} className="edit-indicator" />
           </div>
           <button className="delete-btn" onClick={onDelete} title="Odstrani skupino">
-            <Trash2 size={20} />
+            <Trash2 size={48} />
           </button>
         </div>
         {!isCollapsed && (
