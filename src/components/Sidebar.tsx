@@ -531,7 +531,15 @@ export const Sidebar = () => {
                   <button onClick={() => toggleSubprocessVisibility(sub.id)} style={{ background: 'transparent', border: 'none', color: isHidden ? 'var(--text-muted)' : 'var(--text-main)', cursor: 'pointer', padding: '2px' }} title={isHidden ? "Prikaži" : "Skrij"}>
                     {isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
-                  <button onClick={() => removeSubprocess(sub.id)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px' }} title="Odstrani">
+                  <button 
+                    onClick={() => {
+                      if (window.confirm(`Ali ste prepričani, da želite odstraniti subproces "${sub.name}"?`)) {
+                        removeSubprocess(sub.id);
+                      }
+                    }} 
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px' }} 
+                    title="Odstrani"
+                  >
                     <X size={14} />
                   </button>
                 </div>
