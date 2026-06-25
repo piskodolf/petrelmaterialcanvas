@@ -123,40 +123,88 @@ export const SubprocessMapModal: React.FC<SubprocessMapModalProps> = ({
       };
     });
 
-    // 3. Aggregate relationships from process edges
-    const connections: Record<string, { count: number; materials: Set<string>; tools: Set<string> }> = {};
+    // 3. Aggregate relationships from process edges (direct & via intermediate storage/departments)
+    const connections: Record<string, { count: number; materials: Set<string>; tools: Set<string>; intermediates: Set<string> }> = {};
 
-    edges.forEach(e => {
-      const sNode = nodes.find(n => n.id === e.source);
-      const tNode = nodes.find(n => n.id === e.target);
-      if (!sNode || !tNode) return;
-
-      const sourceSubId = sNode.data?.subprocess;
-      const targetSubId = tNode.data?.subprocess;
-
-      // Only check connections between different active subprocesses
-      if (sourceSubId && targetSubId && sourceSubId !== targetSubId && nodesBySub[sourceSubId]?.length > 0 && nodesBySub[targetSubId]?.length > 0) {
-        const key = `${sourceSubId}->${targetSubId}`;
-        if (!connections[key]) {
-          connections[key] = {
-            count: 0,
-            materials: new Set<string>(),
-            tools: new Set<string>(),
-          };
-        }
-        connections[key].count += 1;
+    activeSubprocesses.forEach(subA => {
+      // Find all starting nodes for this subprocess
+      const startNodes = nodesBySub[subA.id];
+      
+      startNodes.forEach(startNode => {
+        // BFS to find reachable subprocesses
+        const queue: Array<{
+          nodeId: string;
+          edgesTraversed: any[];
+          nodesVisited: string[];
+        }> = [{ nodeId: startNode.id, edgesTraversed: [], nodesVisited: [startNode.id] }];
         
-        // Collect material details if present
-        if (e.data?.materialUrl && e.data.materialUrl.startsWith('text:')) {
-          connections[key].materials.add(e.data.materialUrl.substring(5));
-        } else if (e.data?.materialUrl) {
-          connections[key].materials.add('Material s slikico');
+        const visitedInThisBfs = new Set<string>([startNode.id]);
+
+        while (queue.length > 0) {
+          const state = queue.shift()!;
+          
+          // Find outgoing edges
+          const outgoing = edges.filter(e => e.source === state.nodeId && !e.hidden);
+          
+          outgoing.forEach(e => {
+            const nextId = e.target;
+            if (state.nodesVisited.includes(nextId)) return; // Avoid cyclic paths
+            
+            const nextNode = nodes.find(n => n.id === nextId);
+            if (!nextNode) return;
+            
+            const nextSubId = nextNode.data?.subprocess;
+            
+            if (nextSubId) {
+              // Reached another subprocess
+              if (nextSubId !== subA.id && nodesBySub[nextSubId]?.length > 0) {
+                const key = `${subA.id}->${nextSubId}`;
+                if (!connections[key]) {
+                  connections[key] = {
+                    count: 0,
+                    materials: new Set<string>(),
+                    tools: new Set<string>(),
+                    intermediates: new Set<string>(),
+                  };
+                }
+                connections[key].count += 1;
+                
+                // Aggregate materials and tools along the whole path
+                const allEdgesInPath = [...state.edgesTraversed, e];
+                allEdgesInPath.forEach(pathEdge => {
+                  if (pathEdge.data?.materialUrl && pathEdge.data.materialUrl.startsWith('text:')) {
+                    connections[key].materials.add(pathEdge.data.materialUrl.substring(5));
+                  } else if (pathEdge.data?.materialUrl) {
+                    connections[key].materials.add('Slikica');
+                  }
+                  if (pathEdge.data?.tool) {
+                    connections[key].tools.add(pathEdge.data.tool);
+                  }
+                });
+                
+                // Aggregate intermediate node labels
+                state.nodesVisited.forEach((visitedNodeId, idx) => {
+                  if (idx === 0) return; // Skip start node
+                  const vNode = nodes.find(n => n.id === visitedNodeId);
+                  if (vNode && vNode.data?.label) {
+                    connections[key].intermediates.add(vNode.data.label);
+                  }
+                });
+              }
+            } else {
+              // Intermediate node (e.g. storage, department, or node without subprocess)
+              if (!visitedInThisBfs.has(nextId)) {
+                visitedInThisBfs.add(nextId);
+                queue.push({
+                  nodeId: nextId,
+                  edgesTraversed: [...state.edgesTraversed, e],
+                  nodesVisited: [...state.nodesVisited, nextId],
+                });
+              }
+            }
+          });
         }
-        
-        if (e.data?.tool) {
-          connections[key].tools.add(e.data.tool);
-        }
-      }
+      });
     });
 
     // 4. Create High-Level edges
@@ -189,8 +237,11 @@ export const SubprocessMapModal: React.FC<SubprocessMapModalProps> = ({
         }
       }
 
-      // Build label text with count and materials
+      // Build label text with count, intermediate nodes, and materials
       let label = `${info.count} prenos${info.count > 1 ? 'ov' : ''}`;
+      if (info.intermediates.size > 0) {
+        label += ` preko ${Array.from(info.intermediates).join(', ')}`;
+      }
       if (info.materials.size > 0) {
         label += ` (${Array.from(info.materials).join(', ')})`;
       }
