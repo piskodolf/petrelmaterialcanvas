@@ -357,6 +357,8 @@ export const Sidebar = () => {
   
   const [newSubprocessName, setNewSubprocessName] = useState('');
   const [newSubprocessColor, setNewSubprocessColor] = useState('#3b82f6');
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [editingSubName, setEditingSubName] = useState<string>('');
 
   const handleAddSubprocess = () => {
     if (newSubprocessName.trim()) {
@@ -472,7 +474,52 @@ export const Sidebar = () => {
             const isHidden = hiddenSubprocesses.includes(sub.id);
             return (
               <div key={sub.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', borderLeft: `3px solid ${sub.color}`, padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>
-                <span style={{ color: 'var(--text-main)', flex: 1, opacity: isHidden ? 0.5 : 1 }}>{sub.name}</span>
+                {editingSubId === sub.id ? (
+                  <input
+                    type="text"
+                    value={editingSubName}
+                    onChange={(e) => setEditingSubName(e.target.value)}
+                    onBlur={() => {
+                      if (editingSubName.trim()) {
+                        updateSubprocess(sub.id, editingSubName.trim(), sub.color);
+                      }
+                      setEditingSubId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (editingSubName.trim()) {
+                          updateSubprocess(sub.id, editingSubName.trim(), sub.color);
+                        }
+                        setEditingSubId(null);
+                      } else if (e.key === 'Escape') {
+                        setEditingSubId(null);
+                      }
+                    }}
+                    autoFocus
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.6)',
+                      border: '1px solid var(--border-active)',
+                      borderRadius: '4px',
+                      color: 'var(--text-main)',
+                      fontSize: '0.8rem',
+                      padding: '2px 6px',
+                      flex: 1,
+                      outline: 'none',
+                      marginRight: '6px'
+                    }}
+                  />
+                ) : (
+                  <span 
+                    style={{ color: 'var(--text-main)', flex: 1, opacity: isHidden ? 0.5 : 1, cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => {
+                      setEditingSubId(sub.id);
+                      setEditingSubName(sub.name);
+                    }}
+                    title="Klikni za urejanje imena"
+                  >
+                    {sub.name}
+                  </span>
+                )}
                 <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
                   <button onClick={() => moveSubprocessUp(sub.id)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '1px' }} title="Premakni gor">
                     <ChevronUp size={14} />
