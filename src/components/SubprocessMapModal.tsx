@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   Handle,
@@ -15,8 +16,8 @@ import { useMaterials } from '../contexts/MaterialContext';
 interface SubprocessMapModalProps {
   isOpen: boolean;
   onClose: () => void;
-  nodes: any[];
-  edges: any[];
+  nodes?: any[];
+  edges?: any[];
 }
 
 // Custom Subprocess Node Component inside the map (White High-Contrast Theme)
@@ -53,7 +54,7 @@ const SubprocessNodeComponent = ({ data }: any) => {
           <span>Število elementov:</span>
           <strong style={{ color: '#0f172a' }}>{data.elementCount}</strong>
         </div>
-        {data.elements.length > 0 && (
+        {data.elements && data.elements.length > 0 && (
           <div style={{ marginTop: '4px', fontSize: '10px', maxHeight: '80px', overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {data.elements.map((elName: string, i: number) => (
               <div key={i} style={{ background: '#f8fafc', color: '#334155', padding: '4px 8px', borderRadius: '4px', borderLeft: `3px solid ${data.color}`, fontSize: '10px' }}>
@@ -74,8 +75,8 @@ const nodeTypes = {
 export const SubprocessMapModal: React.FC<SubprocessMapModalProps> = ({
   isOpen,
   onClose,
-  nodes,
-  edges,
+  nodes = [],
+  edges = [],
 }) => {
   const { savedSubprocesses } = useMaterials();
 
@@ -99,7 +100,7 @@ export const SubprocessMapModal: React.FC<SubprocessMapModalProps> = ({
     });
 
     // 2. Generate flowchart-like grid layout for subprocess nodes
-    const activeSubprocesses = savedSubprocesses.filter(sub => nodesBySub[sub.id].length > 0);
+    const activeSubprocesses = savedSubprocesses.filter(sub => nodesBySub[sub.id] && nodesBySub[sub.id].length > 0);
     const cols = 3;
 
     const newNodes: RFNode[] = activeSubprocesses.map((sub, idx) => {
@@ -127,8 +128,8 @@ export const SubprocessMapModal: React.FC<SubprocessMapModalProps> = ({
     const connections: Record<string, { count: number; materials: Set<string>; tools: Set<string>; intermediates: Set<string> }> = {};
 
     activeSubprocesses.forEach(subA => {
-      // Find all starting nodes for this subprocess
       const startNodes = nodesBySub[subA.id];
+      if (!startNodes) return;
       
       startNodes.forEach(startNode => {
         // BFS to find reachable subprocesses
@@ -157,7 +158,7 @@ export const SubprocessMapModal: React.FC<SubprocessMapModalProps> = ({
             
             if (nextSubId) {
               // Reached another subprocess
-              if (nextSubId !== subA.id && nodesBySub[nextSubId]?.length > 0) {
+              if (nextSubId !== subA.id && nodesBySub[nextSubId] && nodesBySub[nextSubId].length > 0) {
                 const key = `${subA.id}->${nextSubId}`;
                 if (!connections[key]) {
                   connections[key] = {
@@ -282,107 +283,102 @@ export const SubprocessMapModal: React.FC<SubprocessMapModalProps> = ({
       bottom: 0,
       zIndex: 9999,
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'rgba(15, 23, 42, 0.6)',
-      backdropFilter: 'blur(8px)',
-      padding: '24px',
+      flexDirection: 'column',
+      background: '#ffffff',
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden',
     }}>
+      {/* Header */}
       <div style={{
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '16px',
-        width: '100%',
-        maxWidth: '1050px',
-        height: '85vh',
         display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-        overflow: 'hidden',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '16px 24px',
+        borderBottom: '1px solid #e2e8f0',
+        background: '#f8fafc',
+        height: '60px',
+        boxSizing: 'border-box',
       }}>
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '16px 24px',
-          borderBottom: '1px solid #e2e8f0',
-          background: '#f8fafc',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Network size={20} style={{ color: '#2563eb' }} />
-            <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a', fontWeight: 600 }}>
-              Zemljevid odnosov med subprocesi
-            </h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Network size={20} style={{ color: '#2563eb' }} />
+          <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a', fontWeight: 600 }}>
+            Zemljevid odnosov med subprocesi
+          </h2>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#64748b',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '6px',
+            borderRadius: '50%',
+            transition: 'background 0.2s',
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Legend / Tip */}
+      <div style={{
+        padding: '12px 24px',
+        background: '#f1f5f9',
+        borderBottom: '1px solid #e2e8f0',
+        fontSize: '11px',
+        color: '#475569',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        height: '40px',
+        boxSizing: 'border-box',
+      }}>
+        <span style={{ color: '#2563eb' }}>💡</span>
+        Ta pogled samodejno agregira povezave med posameznimi elementi na platnu in jih prikazuje v obliki linearnega diagrama subprocesov.
+      </div>
+
+      {/* Map Canvas */}
+      <div style={{ flexGrow: 1, width: '100%', height: 'calc(100vh - 100px)', position: 'relative', background: '#ffffff' }}>
+        {mapNodes.length === 0 ? (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            textAlign: 'center',
+            maxWidth: '400px'
+          }}>
+            <Network size={48} style={{ color: '#94a3b8', marginBottom: '16px' }} />
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', color: '#0f172a' }}>
+              Ni najdenih subprocesov
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', lineHeight: 1.4 }}>
+              Subprocese z elementi morate najprej ustvariti in dodeliti posameznim procesom na glavnem platnu.
+            </p>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#64748b',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              padding: '6px',
-              borderRadius: '50%',
-              transition: 'background 0.2s',
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Legend / Tip */}
-        <div style={{
-          padding: '12px 24px',
-          background: '#f1f5f9',
-          borderBottom: '1px solid #e2e8f0',
-          fontSize: '11px',
-          color: '#475569',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}>
-          <span style={{ color: '#2563eb' }}>💡</span>
-          Ta pogled samodejno agregira povezave med posameznimi elementi na platnu in jih prikazuje v obliki linearnega diagrama subprocesov.
-        </div>
-
-        {/* Map Canvas */}
-        <div style={{ flexGrow: 1, position: 'relative', background: '#ffffff' }}>
-          {mapNodes.length === 0 ? (
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              textAlign: 'center',
-              maxWidth: '400px'
-            }}>
-              <Network size={48} style={{ color: '#94a3b8', marginBottom: '16px' }} />
-              <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', color: '#0f172a' }}>
-                Ni najdenih subprocesov
-              </h3>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', lineHeight: 1.4 }}>
-                Subprocese z elementi morate najprej ustvariti in dodeliti posameznim procesom na glavnem platnu.
-              </p>
-            </div>
-          ) : (
+        ) : (
+          <ReactFlowProvider>
             <ReactFlow
               nodes={mapNodes}
               edges={mapEdges}
               nodeTypes={nodeTypes}
               fitView
-              minZoom={0.5}
+              fitViewOptions={{ padding: 0.2 }}
+              minZoom={0.2}
               maxZoom={2}
+              style={{ width: '100%', height: '100%' }}
             >
               <Background color="#cbd5e1" gap={24} size={1} />
               <Controls />
             </ReactFlow>
-          )}
-        </div>
+          </ReactFlowProvider>
+        )}
       </div>
     </div>
   );

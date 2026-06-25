@@ -37,10 +37,10 @@ export function useFirebaseSync(flowId: string, initialNodes: Node[], initialEdg
     if (typeof window !== 'undefined' && window.location.search.includes('mock=true')) {
       return [
         { id: 'dept', type: 'department', position: { x: 200, y: 30 }, style: { width: 350, height: 400 }, data: { label: 'Department X' } },
-        { id: 'n1', type: 'process', position: { x: 50, y: 150 }, data: { label: 'Process 1' } },
-        { id: 'n2', type: 'process', position: { x: 600, y: 150 }, data: { label: 'Process 2' } },
-        { id: 'n3', type: 'process', parentId: 'dept', position: { x: 20, y: 20 }, data: { label: 'Process 3' } },
-        { id: 'n4', type: 'process', parentId: 'dept', position: { x: 20, y: 220 }, data: { label: 'Process 4' } },
+        { id: 'n1', type: 'process', position: { x: 50, y: 150 }, data: { label: 'Process 1', subprocess: 'sub_1' } },
+        { id: 'n2', type: 'process', position: { x: 600, y: 150 }, data: { label: 'Process 2', subprocess: 'sub_2' } },
+        { id: 'n3', type: 'process', parentId: 'dept', position: { x: 20, y: 20 }, data: { label: 'Process 3', subprocess: 'sub_1' } },
+        { id: 'n4', type: 'process', parentId: 'dept', position: { x: 20, y: 220 }, data: { label: 'Process 4', subprocess: 'sub_2' } },
       ];
     }
     return initialNodes;
@@ -57,7 +57,7 @@ export function useFirebaseSync(flowId: string, initialNodes: Node[], initialEdg
           targetHandle: 'input',
           type: 'movement', 
           zIndex: 1, 
-          data: { connectionType: 'movement', pathType: 'straight' } 
+          data: { connectionType: 'movement', pathType: 'straight', materialUrl: 'text:Aluminij' } 
         },
         { 
           id: 'e2', 
