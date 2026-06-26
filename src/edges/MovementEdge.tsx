@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useState, useMemo } from 'react';
 import { 
   getBezierPath, 
   getSmoothStepPath,
@@ -35,7 +35,38 @@ export const MovementEdge = memo(({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-  const isFilteredOut = activeFilter && data?.materialUrl !== activeFilter;
+  const materialUrls = useMemo(() => {
+    if (Array.isArray(data?.materialUrls)) {
+      return data.materialUrls as string[];
+    }
+    if (data?.materialUrl) {
+      return [data.materialUrl as string];
+    }
+    return [];
+  }, [data?.materialUrl, data?.materialUrls]);
+
+  const selectMaterial = (url: string) => {
+    if (!materialUrls.includes(url)) {
+      const next = [...materialUrls, url];
+      // Update both for backwards-compatibility
+      setEdges((eds) => eds.map((e) => {
+        if (e.id === id) {
+          return {
+            ...e,
+            data: {
+              ...e.data,
+              materialUrls: next,
+              materialUrl: next[0] || null
+            }
+          };
+        }
+        return e;
+      }));
+    }
+    setPickerOpen(false);
+  };
+
+  const isFilteredOut = activeFilter && !materialUrls.includes(activeFilter);
   const connectionType = data?.connectionType as string || 'flow';
   const isMovement = connectionType === 'movement';
   const hasPerformerAndTool = connectionType === 'movement' || connectionType === 'delivery';
@@ -106,8 +137,7 @@ export const MovementEdge = memo(({
           
           const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
           addMaterialToLibrary(dataUrl);
-          updateData('materialUrl', dataUrl);
-          setPickerOpen(false);
+          selectMaterial(dataUrl);
         };
         img.src = event.target?.result as string;
       };
@@ -146,9 +176,7 @@ export const MovementEdge = memo(({
                     const catVal = inputCat?.value.trim() || 'Neuvrščeno';
                     const textUrl = `text:${nameVal}`;
                     addMaterialToLibrary(textUrl, catVal, nameVal);
-                    updateData('materialUrl', textUrl);
-                    updateData('description', nameVal);
-                    setPickerOpen(false);
+                    selectMaterial(textUrl);
                   }
                 }
               }}
@@ -170,9 +198,7 @@ export const MovementEdge = memo(({
                       const catVal = inputCat?.value.trim() || 'Neuvrščeno';
                       const textUrl = `text:${nameVal}`;
                       addMaterialToLibrary(textUrl, catVal, nameVal);
-                      updateData('materialUrl', textUrl);
-                      updateData('description', nameVal);
-                      setPickerOpen(false);
+                      selectMaterial(textUrl);
                     }
                   }
                 }}
@@ -192,9 +218,7 @@ export const MovementEdge = memo(({
                     const catVal = inputCat?.value.trim() || 'Neuvrščeno';
                     const textUrl = `text:${nameVal}`;
                     addMaterialToLibrary(textUrl, catVal, nameVal);
-                    updateData('materialUrl', textUrl);
-                    updateData('description', nameVal);
-                    setPickerOpen(false);
+                    selectMaterial(textUrl);
                   }
                 }}
                 style={{ padding: '6px 12px', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', whiteSpace: 'nowrap' }}
@@ -243,7 +267,7 @@ export const MovementEdge = memo(({
                   {isExpanded && (
                     <div className="picker-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
                       {items.map((item, i) => (
-                        <div key={i} className="picker-item" onClick={() => { updateData('materialUrl', item.url); setPickerOpen(false); }} style={{ width: '38px', height: '38px', position: 'relative' }}>
+                        <div key={i} className="picker-item" onClick={() => selectMaterial(item.url)} style={{ width: '38px', height: '38px', position: 'relative' }}>
                           {item.url.startsWith('text:') ? (
                             <div style={{ fontSize: '6px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', width: '100%', wordBreak: 'break-word', lineHeight: 1.1, padding: '1px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                               {item.url.substring(5)}
@@ -432,29 +456,60 @@ export const MovementEdge = memo(({
               </div>
               
               {/* Material Assignment */}
-              <div className="movement-row" title="Polizdelek / Material">
+              <div className="movement-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }} title="Polizdelki / Materiali">
+                {materialUrls.map((url, idx) => (
+                  <div 
+                    key={idx}
+                    style={{ display: 'flex', alignItems: 'center', position: 'relative' }}
+                  >
+                    <div 
+                      className="edge-material-slot has-material"
+                      onPointerDown={onPointerDown}
+                    >
+                      {url.startsWith('text:') ? (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1, padding: '1px' }}>
+                          {url.substring(5)}
+                        </div>
+                      ) : (
+                        <img src={url} alt="Material" />
+                      )}
+                    </div>
+                    <button 
+                      className="edge-material-remove" 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        const next = materialUrls.filter((_, i) => i !== idx);
+                        setEdges((eds) => eds.map((e) => {
+                          if (e.id === id) {
+                            return {
+                              ...e,
+                              data: {
+                                ...e.data,
+                                materialUrls: next,
+                                materialUrl: next[0] || null
+                              }
+                            };
+                          }
+                          return e;
+                        }));
+                      }} 
+                      onPointerDown={onPointerDown} 
+                      title="Odstrani material"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+                
                 <div 
-                  className={`edge-material-slot ${data?.materialUrl ? 'has-material' : ''}`}
+                  className="edge-material-slot"
                   onClick={() => setPickerOpen(true)}
                   onPointerDown={onPointerDown}
+                  style={{ cursor: 'pointer', border: '1px dashed var(--border-subtle)', background: 'transparent' }}
+                  title="Dodaj material"
                 >
-                  {data?.materialUrl ? (
-                    (data.materialUrl as string).startsWith('text:') ? (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1, padding: '1px' }}>
-                        {(data.materialUrl as string).substring(5)}
-                      </div>
-                    ) : (
-                      <img src={data.materialUrl as string} alt="Material" />
-                    )
-                  ) : (
-                    <Package size={10} className="edge-material-add" />
-                  )}
+                  <Package size={10} className="edge-material-add" />
                 </div>
-                {Boolean(data?.materialUrl) && (
-                  <button className="edge-material-remove" onClick={(e) => { e.stopPropagation(); updateData('materialUrl', null); }} onPointerDown={onPointerDown} title="Odstrani material">
-                    &times;
-                  </button>
-                )}
               </div>
               <div className="movement-row" title="Daljši opis" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -493,15 +548,15 @@ export const MovementEdge = memo(({
               ) : (
                 <ArrowRight size={14} className="movement-icon" style={{ color: 'var(--text-muted)' }} />
               )}
-              {Boolean(data?.materialUrl) && (
-                (data!.materialUrl as string).startsWith('text:') ? (
-                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'var(--bg-node)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1, padding: '1px', color: 'var(--text-main)', overflow: 'hidden' }} title="Polizdelek">
-                    {(data!.materialUrl as string).substring(5)}
+              {materialUrls.map((url, idx) => (
+                url.startsWith('text:') ? (
+                  <div key={idx} style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'var(--bg-node)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1, padding: '1px', color: 'var(--text-main)', overflow: 'hidden', marginLeft: idx > 0 ? '-6px' : '0px', zIndex: 10 - idx }} title="Polizdelek">
+                    {url.substring(5)}
                   </div>
                 ) : (
-                  <img src={data?.materialUrl as string} alt="Material" style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover' }} title="Polizdelek" />
+                  <img key={idx} src={url} alt="Material" style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-subtle)', marginLeft: idx > 0 ? '-6px' : '0px', zIndex: 10 - idx }} title="Polizdelek" />
                 )
-              )}
+              ))}
               {Boolean(data?.issues && ((data?.issues || []) as any[]).filter(i => i.type !== 'vprasanje').length > 0) && (
                 <span 
                   style={{ background: 'var(--accent-warning)', color: '#000', padding: '1px 5px', borderRadius: '8px', fontSize: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '2px' }}

@@ -961,13 +961,9 @@ export const ProcessNode = memo(({ id, data, selected }: NodeProps) => {
               defaultValue={data.description as string || ''}
               onBlur={(e) => {
                 updateData('description', e.target.value);
-                e.target.style.height = '24px';
-              }}
-              onFocus={(e) => {
-                e.target.style.height = '60px';
               }}
               placeholder="Dodaj daljši opis..."
-              style={{ width: '100%', height: '24px', resize: 'vertical', fontSize: '11px', lineHeight: '1.3', padding: '4px', transition: 'height 0.2s', textAlign: 'left' }}
+              style={{ width: '100%', height: '100px', resize: 'vertical', fontSize: '11px', lineHeight: '1.3', padding: '4px', textAlign: 'left' }}
             />
           </div>
 
