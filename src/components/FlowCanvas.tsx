@@ -100,78 +100,14 @@ export const FlowCanvas = () => {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [subprocessViewOpen, setSubprocessViewOpen] = useState<boolean>(false);
   const [subprocessMapOpen, setSubprocessMapOpen] = useState<boolean>(false);
+  const [pendingConnection, setPendingConnection] = useState<{
+    params: Connection | Edge;
+    availableMaterials: string[];
+  } | null>(null);
 
-  const onConnect = useCallback(
-    (params: Connection | Edge) => {
+  const completeConnection = useCallback(
+    (params: Connection | Edge, materialUrl: string | null) => {
       const currentNodes = getNodes();
-      let materialUrl: string | null = null;
-      const sourceNode = currentNodes.find(n => n.id === params.source);
-      
-      if (sourceNode && params.sourceHandle) {
-        if (params.sourceHandle.startsWith('output-col-')) {
-          const parts = params.sourceHandle.split('-');
-          let colIndex = 0;
-          let slotIndex = 0;
-          let isLeftSource = false;
-          
-          if (parts[2] === 'left') {
-            isLeftSource = true;
-            colIndex = parseInt(parts[3], 10);
-            slotIndex = parseInt(parts[5], 10);
-          } else {
-            colIndex = parseInt(parts[2], 10);
-            slotIndex = parseInt(parts[4], 10);
-          }
-          
-          if (sourceNode.type === 'process') {
-            let cols: any[] = [];
-            if (isLeftSource) {
-              cols = Array.isArray(sourceNode.data.inputColumns) ? (sourceNode.data.inputColumns as any[]) : [];
-              if (cols.length === 0 && Array.isArray(sourceNode.data.materialsBefore)) {
-                cols = (sourceNode.data.materialsBefore as any[]).map((mat: any) => ({ materialUrl: mat, items: [] }));
-              }
-            } else {
-              cols = Array.isArray(sourceNode.data.outputColumns) ? (sourceNode.data.outputColumns as any[]) : [];
-              if (cols.length === 0 && Array.isArray(sourceNode.data.materialsAfter)) {
-                cols = (sourceNode.data.materialsAfter as any[]).map((mat: any) => ({ materialUrl: mat, items: [] }));
-              }
-            }
-            
-            const col = cols[colIndex];
-            if (col) {
-              materialUrl = (Array.isArray(col.items) ? col.items[slotIndex] : null) || col.materialUrl;
-            }
-          } else if (sourceNode.type === 'storage') {
-            let cols = Array.isArray(sourceNode.data.columns) ? (sourceNode.data.columns as any[]) : [];
-            if (cols.length === 0 && Array.isArray(sourceNode.data.materials)) {
-              cols = (sourceNode.data.materials as any[]).map((mat: any) => ({ materialUrl: mat, items: [] }));
-            }
-            const col = cols[colIndex];
-            if (col) {
-              materialUrl = (Array.isArray(col.items) ? col.items[slotIndex] : null) || col.materialUrl;
-            }
-          }
-        } else {
-          // Fallback to first material if dragged from generic output handle or if sourceHandle is null
-          const srcKey = sourceNode.type === 'process' ? 'outputColumns' : 'columns';
-          let cols = Array.isArray(sourceNode.data[srcKey]) ? (sourceNode.data[srcKey] as any[]) : [];
-          if (cols.length === 0) {
-            const fbKey = sourceNode.type === 'process' ? 'materialsAfter' : 'materials';
-            if (Array.isArray(sourceNode.data[fbKey])) {
-              cols = sourceNode.data[fbKey].map((mat: any) => ({ materialUrl: mat, items: [] }));
-            }
-          }
-          // Find the first column that actually has an image
-          const colWithImage = cols.find(c => c && (c.materialUrl || (Array.isArray(c.items) && c.items.find(i => i))));
-          if (colWithImage) {
-            const firstItemImg = Array.isArray(colWithImage.items) ? colWithImage.items.find(i => i) : null;
-            materialUrl = firstItemImg || colWithImage.materialUrl;
-          } else if (cols.length > 0 && cols[0]) {
-            materialUrl = (Array.isArray(cols[0].items) ? cols[0].items[0] : null) || cols[0].materialUrl;
-          }
-        }
-      }
-
       const targetNode = currentNodes.find(n => n.id === params.target);
       const isGenericDrop = !params.targetHandle || !params.targetHandle.startsWith('input-col-');
       const safeTargetHandle = params.targetHandle || 'input';
@@ -258,7 +194,110 @@ export const FlowCanvas = () => {
         });
       }
     },
-    [setEdges, setNodes, getNodes],
+    [setEdges, setNodes, getNodes]
+  );
+
+  const onConnect = useCallback(
+    (params: Connection | Edge) => {
+      const currentNodes = getNodes();
+      const sourceNode = currentNodes.find(n => n.id === params.source);
+      const targetNode = currentNodes.find(n => n.id === params.target);
+      
+      // If connecting storage -> process, check if storage has multiple unique materials
+      if (sourceNode && sourceNode.type === 'storage' && targetNode && targetNode.type === 'process') {
+        const cols = Array.isArray(sourceNode.data.columns) ? (sourceNode.data.columns as any[]) : [];
+        const mats = Array.isArray(sourceNode.data.materials) ? (sourceNode.data.materials as any[]) : [];
+        
+        const matSet = new Set<string>();
+        cols.forEach(c => {
+          if (c?.materialUrl) matSet.add(c.materialUrl);
+          if (Array.isArray(c?.items)) {
+            c.items.forEach((item: any) => {
+              if (item) matSet.add(item);
+            });
+          }
+        });
+        mats.forEach(m => {
+          if (m) matSet.add(m);
+        });
+        
+        const availableMaterials = Array.from(matSet).filter(Boolean);
+        
+        if (availableMaterials.length > 1) {
+          // Open connection select dialog instead of finishing immediately
+          setPendingConnection({ params, availableMaterials });
+          return;
+        }
+      }
+
+      let materialUrl: string | null = null;
+      if (sourceNode && params.sourceHandle) {
+        if (params.sourceHandle.startsWith('output-col-')) {
+          const parts = params.sourceHandle.split('-');
+          let colIndex = 0;
+          let slotIndex = 0;
+          let isLeftSource = false;
+          
+          if (parts[2] === 'left') {
+            isLeftSource = true;
+            colIndex = parseInt(parts[3], 10);
+            slotIndex = parseInt(parts[5], 10);
+          } else {
+            colIndex = parseInt(parts[2], 10);
+            slotIndex = parseInt(parts[4], 10);
+          }
+          
+          if (sourceNode.type === 'process') {
+            let cols: any[] = [];
+            if (isLeftSource) {
+              cols = Array.isArray(sourceNode.data.inputColumns) ? (sourceNode.data.inputColumns as any[]) : [];
+              if (cols.length === 0 && Array.isArray(sourceNode.data.materialsBefore)) {
+                cols = (sourceNode.data.materialsBefore as any[]).map((mat: any) => ({ materialUrl: mat, items: [] }));
+              }
+            } else {
+              cols = Array.isArray(sourceNode.data.outputColumns) ? (sourceNode.data.outputColumns as any[]) : [];
+              if (cols.length === 0 && Array.isArray(sourceNode.data.materialsAfter)) {
+                cols = (sourceNode.data.materialsAfter as any[]).map((mat: any) => ({ materialUrl: mat, items: [] }));
+              }
+            }
+            
+            const col = cols[colIndex];
+            if (col) {
+              materialUrl = (Array.isArray(col.items) ? col.items[slotIndex] : null) || col.materialUrl;
+            }
+          } else if (sourceNode.type === 'storage') {
+            let cols = Array.isArray(sourceNode.data.columns) ? (sourceNode.data.columns as any[]) : [];
+            if (cols.length === 0 && Array.isArray(sourceNode.data.materials)) {
+              cols = (sourceNode.data.materials as any[]).map((mat: any) => ({ materialUrl: mat, items: [] }));
+            }
+            const col = cols[colIndex];
+            if (col) {
+              materialUrl = (Array.isArray(col.items) ? col.items[slotIndex] : null) || col.materialUrl;
+            }
+          }
+        } else {
+          // Fallback to first material if dragged from generic output handle or if sourceHandle is null
+          const srcKey = sourceNode.type === 'process' ? 'outputColumns' : 'columns';
+          let cols = Array.isArray(sourceNode.data[srcKey]) ? (sourceNode.data[srcKey] as any[]) : [];
+          if (cols.length === 0) {
+            const fbKey = sourceNode.type === 'process' ? 'materialsAfter' : 'materials';
+            if (Array.isArray(sourceNode.data[fbKey])) {
+              cols = sourceNode.data[fbKey].map((mat: any) => ({ materialUrl: mat, items: [] }));
+            }
+          }
+          const colWithImage = cols.find(c => c && (c.materialUrl || (Array.isArray(c.items) && c.items.find(i => i))));
+          if (colWithImage) {
+            const firstItemImg = Array.isArray(colWithImage.items) ? colWithImage.items.find(i => i) : null;
+            materialUrl = firstItemImg || colWithImage.materialUrl;
+          } else if (cols.length > 0 && cols[0]) {
+            materialUrl = (Array.isArray(cols[0].items) ? cols[0].items[0] : null) || cols[0].materialUrl;
+          }
+        }
+      }
+
+      completeConnection(params, materialUrl);
+    },
+    [completeConnection, getNodes],
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -981,6 +1020,110 @@ export const FlowCanvas = () => {
           nodes={nodes} 
           edges={edges} 
         />
+      )}
+      
+      {pendingConnection && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+        }}>
+          <div style={{
+            background: 'var(--bg-panel, #1e293b)',
+            border: '1px solid var(--border-subtle, #334155)',
+            borderRadius: '16px',
+            padding: '24px',
+            width: '100%',
+            maxWidth: '420px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+            color: 'var(--text-main, #f8fafc)',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
+          }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 600 }}>
+              Izberi izdelek za prenos
+            </h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)', lineHeight: 1.4 }}>
+              Izberite material/izdelek, ki ga želite prenesti iz skladišča na izbrani proces:
+            </p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto', marginBottom: '20px' }}>
+              {pendingConnection.availableMaterials.map((url) => {
+                const isText = url.startsWith('text:');
+                const label = isText ? url.substring(5) : 'Slika';
+                
+                return (
+                  <button
+                    key={url}
+                    onClick={() => {
+                      completeConnection(pendingConnection.params, url);
+                      setPendingConnection(null);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      width: '100%',
+                      padding: '12px 16px',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid var(--border-subtle, #334155)',
+                      borderRadius: '8px',
+                      color: 'var(--text-main, #f8fafc)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(37, 99, 235, 0.15)';
+                      e.currentTarget.style.borderColor = '#2563eb';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                      e.currentTarget.style.borderColor = 'var(--border-subtle, #334155)';
+                    }}
+                  >
+                    {isText ? (
+                      <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: '#3b82f6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', padding: '2px', textAlign: 'center', wordBreak: 'break-all' }}>
+                        {label.substring(0, 4)}
+                      </div>
+                    ) : (
+                      <img src={url} alt="Material" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover' }} />
+                    )}
+                    <span style={{ fontSize: '0.9rem', fontWeight: 550 }}>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setPendingConnection(null)}
+                style={{
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  border: '1px solid var(--border-subtle, #334155)',
+                  borderRadius: '6px',
+                  color: 'var(--text-muted, #94a3b8)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                Prekliči
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
